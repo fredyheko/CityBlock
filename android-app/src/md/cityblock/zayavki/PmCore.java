@@ -126,15 +126,17 @@ public final class PmCore {
         line(sb, "📍 ", c.title);
         line(sb, "👤 Клиент: ", c.client);
         for (String ph : c.phones) line(sb, "📞 ", CaseDetails.pretty(ph));
-        line(sb, "📋 ", CaseDetails.shorten(c.description, 900));
+        List<String> comments = CaseDetails.comments(c.description);
+        if (!comments.isEmpty()) {
+            for (String cm : comments) line(sb, "📋 ", CaseDetails.shorten(cm, 500));
+        } else if (c.client.isEmpty() && c.phones.isEmpty()) {
+            // описание нестандартное — показываем как есть, чтобы ничего не потерять
+            line(sb, "📋 ", CaseDetails.shorten(c.description, 700));
+        }
         int shown = 0;
         for (int i = c.notes.size() - 1; i >= 0 && shown < 2; i--, shown++) {
             line(sb, "💬 ", CaseDetails.shorten(c.notes.get(i), 400));
         }
-        line(sb, "⚙️ ", c.process);
-        line(sb, "📝 ", c.task);
-        line(sb, "↗️ Отправил: ", c.sentBy);
-        line(sb, "⏰ Срок: ", c.due);
         return sb.toString().trim();
     }
 

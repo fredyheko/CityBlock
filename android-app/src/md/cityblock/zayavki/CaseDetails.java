@@ -108,6 +108,29 @@ public final class CaseDetails {
         return "";
     }
 
+    private static final Pattern STAMP = Pattern.compile(
+            "\\d{4}-\\d{2}-\\d{2}[ T]\\d{1,2}:\\d{2}(?::\\d{2})?");
+
+    /**
+     * Комментарии из описания: текст после каждой метки времени.
+     * «… Shelter: Riskani 2026-11-03 15:52:23 operator3 Modificare abonament»
+     * → [«operator3 Modificare abonament»]
+     */
+    public static List<String> comments(String description) {
+        List<String> out = new ArrayList<>();
+        if (description == null) return out;
+        Matcher m = STAMP.matcher(description);
+        List<int[]> marks = new ArrayList<>();
+        while (m.find()) marks.add(new int[]{m.start(), m.end()});
+        for (int i = 0; i < marks.size(); i++) {
+            int from = marks.get(i)[1];
+            int to = i + 1 < marks.size() ? marks.get(i + 1)[0] : description.length();
+            String t = description.substring(from, to).replaceAll("\\s+", " ").trim();
+            if (!t.isEmpty()) out.add(t);
+        }
+        return out;
+    }
+
     /** Имя клиента — первая часть описания «Имя | телефон | …», если в ней нет цифр. */
     public static String clientName(String description) {
         if (description == null) return "";

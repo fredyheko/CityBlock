@@ -65,7 +65,7 @@ public class CoreTest {
         check(k.description.equals("Conectare internet 100Mb + TV\nEtajul 3, interfon 12"), "description: " + k.description.replace("\n", " | "));
         check(k.notes.size() == 1 && k.notes.get(0).startsWith("Test Dispecer, 2026-11-04 08:09: Client nou"), "notes: " + k.notes);
         String det = PmCore.details(k);
-        check(det.contains("📞 +373 69 000 111") && det.contains("📋 Conectare") && det.contains("💬 Test"), "details text");
+        check(det.contains("📞 +373 69 000 111") && det.contains("💬 Test"), "details text");
         System.out.println(det);
         k.description = "";
         CaseDetails.fill(k, Arrays.asList("notes", "summaryAjax", "summary"), Arrays.asList("<html>login</html>", "", null));
@@ -91,6 +91,12 @@ public class CoreTest {
         check(d.client.equals("Ionescu Ion"), "client name: " + d.client);
         check(d.phones.equals(Collections.singletonList("069000101")), "phone from description only: " + d.phones);
         check(d.description.equals(desc), "full description kept");
+        check(CaseDetails.comments(desc).equals(Arrays.asList("operator1 Клиент не отвечает",
+            "operator2 La moment resemnarii nu a fost schimbat echipament")), "comments after timestamps: " + CaseDetails.comments(desc));
+        String det2 = PmCore.details(d);
+        check(!det2.contains("FTTH") && !det2.contains("Срок") && !det2.contains("Отправил") && !det2.contains("Selectare"), "no duplicated/extra lines");
+        check(CaseDetails.comments("Popescu Ana | 068000102 | FTTH RISCANI | Shelter: Riskani 2026-11-03 15:52:23 operator3 Modificare abonament ;schimb echipament")
+            .equals(Collections.singletonList("operator3 Modificare abonament ;schimb echipament")), "single comment");
         System.out.println("────────\n🔔 Новая заявка #" + d.number + "\n" + PmCore.details(d) + "\n────────");
 
         if (a.length > 0) {
