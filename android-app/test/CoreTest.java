@@ -97,6 +97,13 @@ public class CoreTest {
         check(!det2.contains("FTTH") && !det2.contains("Срок") && !det2.contains("Отправил") && !det2.contains("Selectare"), "no duplicated/extra lines");
         check(CaseDetails.comments("Popescu Ana | 068000102 | FTTH RISCANI | Shelter: Riskani 2026-11-03 15:52:23 operator3 Modificare abonament ;schimb echipament")
             .equals(Collections.singletonList("operator3 Modificare abonament ;schimb echipament")), "single comment");
+        String tg = PmCore.telegramHtml(d, "https://x");
+        check(tg.contains("📞 +37369000101\n"), "telegram phone compact");
+        org.json.JSONObject btn = PmCore.telegramButtons(d).getJSONArray("inline_keyboard").getJSONArray(0).getJSONObject(0);
+        check(btn.getString("text").equals("📞 +373 69 000 101 — скопировать")
+            && btn.getJSONObject("copy_text").getString("text").equals("+37369000101"), "telegram copy button");
+        check(PmCore.telegramButtons(new PmCore.Case()) == null, "no phones -> no buttons");
+        System.out.println("── telegram ──\n" + tg);
         System.out.println("────────\n🔔 Новая заявка #" + d.number + "\n" + PmCore.details(d) + "\n────────");
 
         if (a.length > 0) {

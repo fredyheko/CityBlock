@@ -128,34 +128,47 @@ final class Net {
 
     /** Отправить сообщение в Telegram (если настроен). Ошибки возвращает текстом. */
     static String telegram(String token, String chats, String html) {
+        return telegram(token, chats, html, null);
+    }
+
+    /** buttons — inline-клавиатура; если Telegram её не примет, сообщение уйдёт без кнопок. */
+    static String telegram(String token, String chats, String html, JSONObject buttons) {
         if (token.isEmpty() || chats.isEmpty()) return null;
         String err = null;
         for (String chat : chats.split(",")) {
             chat = chat.trim();
             if (chat.isEmpty()) continue;
-            try {
-                HttpURLConnection c = (HttpURLConnection)
-                        new URL("https://api.telegram.org/bot" + token + "/sendMessage").openConnection();
-                c.setConnectTimeout(15_000);
-                c.setReadTimeout(20_000);
-                c.setRequestMethod("POST");
-                c.setDoOutput(true);
-                c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                JSONObject body = new JSONObject()
-                        .put("chat_id", chat).put("text", html)
-                        .put("parse_mode", "HTML").put("disable_web_page_preview", true);
-                try (OutputStream os = c.getOutputStream()) {
-                    os.write(body.toString().getBytes(StandardCharsets.UTF_8));
-                }
-                int code = c.getResponseCode();
-                if (code != 200) {
-                    err = "Telegram " + code + ": " + read(c.getErrorStream());
-                }
-                c.disconnect();
-            } catch (Exception e) {
-                err = "Telegram: " + e.getMessage();
+            String e = sendOne(token, chat, html, buttons);
+            if (e != null && buttons != null && e.startsWith("Telegram 400")) {
+                e = sendOne(token, chat, html, null); // кнопки не приняты — шлём без них
             }
+            if (e != null) err = e;
         }
         return err;
+    }
+
+    private static String sendOne(String token, String chat, String html, JSONObject buttons) {
+        try {
+            HttpURLConnection c = (HttpURLConnection)
+                    new URL("https://api.telegram.org/bot" + token + "/sendMessage").openConnection();
+            c.setConnectTimeout(15_000);
+            c.setReadTimeout(20_000);
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            JSONObject body = new JSONObject()
+                    .put("chat_id", chat).put("text", html)
+                    .put("parse_mode", "HTML").put("disable_web_page_preview", true);
+            if (buttons != null) body.put("reply_markup", buttons);
+            try (OutputStream os = c.getOutputStream()) {
+                os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            int code = c.getResponseCode();
+            String err = code == 200 ? null : "Telegram " + code + ": " + read(c.getErrorStream());
+            c.disconnect();
+            return err;
+        } catch (Exception e) {
+            return "Telegram: " + e.getMessage();
+        }
     }
 }

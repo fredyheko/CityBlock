@@ -193,6 +193,13 @@ public final class CaseDetails {
 
     private static String digits(String s) { return s.replaceAll("\\D", ""); }
 
+    /** 069123456 → +37369123456 */
+    public static String international(String phone) {
+        String d = digits(phone);
+        if (d.startsWith("0") && d.length() == 9) d = d.substring(1);
+        return d.length() == 8 ? "+373" + d : phone;
+    }
+
     /** 069123456 → +373 69 123 456 */
     public static String pretty(String phone) {
         String d = digits(phone);

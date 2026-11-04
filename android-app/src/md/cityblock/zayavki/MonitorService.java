@@ -183,7 +183,7 @@ public class MonitorService extends Service {
                     Net.fetchDetails(base, c, prefs.listAction(), null);
                     Notifier.newCase(this, c);
                     String e = Net.telegram(prefs.tgToken(), prefs.tgChat(),
-                            PmCore.telegramHtml(c, PmCore.homeUrl(base)));
+                            PmCore.telegramHtml(c, PmCore.homeUrl(base)), PmCore.telegramButtons(c));
                     if (e != null) tgError = e;
                 }
             }
