@@ -122,6 +122,17 @@ public class CoreTest {
             && back.notes.equals(d.notes) && back.client.equals(d.client), "json round trip");
         check(PmCore.openCaseUrl(base, d, "unassigned").endsWith("/cases/open?APP_UID=1983&DEL_INDEX=2&action=unassigned"), "open case url");
 
+        // --- взять / заполнить
+        PmCore.Case cl = new PmCore.Case();
+        cl.uid = "11112222333344445555666677778888"; cl.delIndex = "4"; cl.number = "1669260";
+        check(PmCore.claimPost(cl).equals("notValidateThisFields=%5B%5D&DynaformRequiredFields=%5B%5D&DynaformName=cases_Resume"
+            + "&form%5BAPP_UID%5D=11112222333344445555666677778888&form%5BAPP_NUMBER%5D=1669260&form%5BBTN_CATCH%5D=Claim+this+case"),
+            "claim post: " + PmCore.claimPost(cl));
+        check(PmCore.catchOpenUrl(base, cl).endsWith("/cases/cases_Open?APP_UID=11112222333344445555666677778888&DEL_INDEX=4&action=unassigned"), "catch open url");
+        check(PmCore.formUrl(base, cl.uid, "5").endsWith("/cases/cases_Open?APP_UID=11112222333344445555666677778888&DEL_INDEX=5&action=todo"), "form url");
+        check(PmCore.isCaseListUrl(base + "/cases/casesListExtJs") && !PmCore.isCaseListUrl(base + "/cases/cases_Step?TYPE=ASSIGN_TASK"), "case list url");
+        check(PmCore.findByUid(Arrays.asList(cl), cl.uid) == cl && PmCore.findByUid(Arrays.asList(cl), "x") == null, "find by uid");
+
         if (a.length > 0) {
             Files.write(Paths.get(a[0], "fill_ok.js"), LoginJs.fill("tehnician.test", "se\"cr'et\\").getBytes("UTF-8"));
             Files.write(Paths.get(a[0], "fill_bad.js"), LoginJs.fill("tehnician.test", "wrong").getBytes("UTF-8"));

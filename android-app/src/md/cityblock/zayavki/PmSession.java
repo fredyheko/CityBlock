@@ -45,6 +45,45 @@ final class PmSession {
         Net.fetchDetails(new Prefs(ctx).base(), c, action, null);
     }
 
+    /**
+     * Взять заявку (Claim) — те же запросы, что делает сайт: открыть заявку, нажать «Claim this case».
+     * Успех проверяется по списку Inbox. Возвращает заявку из Inbox (с новым DEL_INDEX).
+     */
+    static PmCore.Case claim(Context ctx, PmCore.Case c) throws Exception {
+        init(ctx);
+        Prefs p = new Prefs(ctx);
+        String base = p.base();
+        // заодно входит на сайт, если сессия истекла
+        PmCore.Case fresh = PmCore.findByUid(cases(ctx, "unassigned"), c.uid);
+        if (fresh == null) {
+            PmCore.Case mine = PmCore.findByUid(Net.fetchCases(base, "todo"), c.uid);
+            if (mine != null) return mine; // уже ваша
+            throw new Exception("Заявки уже нет в Unassigned — похоже, её взял кто-то другой.");
+        }
+        c.delIndex = fresh.delIndex;
+        Net.Resp open = Net.request(base, PmCore.catchOpenUrl(base, c), null);
+        if (open.code >= 400) throw new Exception("Сайт не открыл заявку (ошибка " + open.code + ")");
+        Net.Resp r = Net.request(base, PmCore.catchExecutePath(), PmCore.claimPost(c));
+        if (r.code >= 400) throw new Exception("Сайт ответил ошибкой " + r.code);
+
+        PmCore.Case mine = PmCore.findByUid(Net.fetchCases(base, "todo"), c.uid);
+        if (mine == null) {
+            throw new Exception("Заявка не появилась в вашем Inbox. Возможно, её уже взял кто-то другой "
+                    + "или сайт ответил иначе — откройте её в PM.");
+        }
+        PmCore.copyDetails(c, mine);
+        return mine;
+    }
+
+    /** Заявка в моём Inbox (после отправки этапа — с новым DEL_INDEX), или null. */
+    static PmCore.Case findMine(Context ctx, String uid) {
+        try {
+            return PmCore.findByUid(cases(ctx, "todo"), uid);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     static void login(Context ctx, String base, Prefs p) throws Exception {
         synchronized (LOGIN_LOCK) {
             // пока ждали, мог войти другой поток

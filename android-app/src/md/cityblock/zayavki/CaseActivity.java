@@ -152,17 +152,62 @@ public class CaseActivity extends Activity {
 
         // --- действия
         String base = new Prefs(this).base();
-        String openLabel = "unassigned".equals(action) ? "✋  Взять заявку (откроется PM)" : "📝  Открыть заявку в PM";
-        Button open = Ui.button(this, openLabel, 0xFFFFFFFF, Ui.ACCENT);
-        open.setOnClickListener(v -> startActivity(WebActivity.intent(this, PmCore.openCaseUrl(base, c, action))));
+        boolean unassigned = "unassigned".equals(action);
+        Button main = Ui.button(this, unassigned ? "✋  Взять заявку" : "📝  Заполнить заявку", 0xFFFFFFFF, Ui.ACCENT);
+        main.setOnClickListener(v -> {
+            if (unassigned) confirmClaim(main);
+            else startActivity(WebActivity.formIntent(this, c));
+        });
         LinearLayout.LayoutParams lp = Ui.gapTop(this, 16);
         lp.height = Ui.dp(this, 52);
-        root.addView(open, lp);
-        TextView hint = Ui.text(this, "unassigned".equals(action)
-                ? "В PM нажмите кнопку Claim — заявка перейдёт в ваш Inbox."
-                : "Форма заявки откроется в PM, вход уже выполнен.", 12, Ui.MUTED, false);
-        hint.setGravity(Gravity.CENTER);
-        root.addView(hint, Ui.gapTop(this, 6));
+        root.addView(main, lp);
+
+        Button full = Ui.button(this, "Открыть в полном PM", Ui.ACCENT, Ui.CARD);
+        full.setBackground(Ui.rounded(this, Ui.CARD, Ui.BORDER, 10));
+        full.setOnClickListener(v -> startActivity(WebActivity.intent(this, PmCore.openCaseUrl(base, c, action))));
+        LinearLayout.LayoutParams lp2 = Ui.gapTop(this, 8);
+        lp2.height = Ui.dp(this, 46);
+        root.addView(full, lp2);
+    }
+
+    private void confirmClaim(Button btn) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Взять заявку #" + c.number + "?")
+                .setMessage(PmCore.title(c.title).address)
+                .setPositiveButton("Взять", (d, w) -> claim(btn))
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void claim(Button btn) {
+        btn.setEnabled(false);
+        btn.setText("Беру заявку…");
+        new Thread(() -> {
+            try {
+                PmCore.Case mine = PmSession.claim(this, c);
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    c = mine;
+                    action = "todo";
+                    getIntent().putExtra(EXTRA_CASE, PmCore.toJson(c).toString()).putExtra(EXTRA_ACTION, action);
+                    Toast.makeText(this, "Заявка ваша ✓", Toast.LENGTH_SHORT).show();
+                    render();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    btn.setEnabled(true);
+                    btn.setText("✋  Взять заявку");
+                    new android.app.AlertDialog.Builder(this)
+                            .setTitle("Не получилось взять")
+                            .setMessage(e.getMessage())
+                            .setPositiveButton("Открыть в PM", (d, w) -> startActivity(WebActivity.intent(this,
+                                    PmCore.openCaseUrl(new Prefs(this).base(), c, "unassigned"))))
+                            .setNegativeButton("OK", null)
+                            .show();
+                });
+            }
+        }).start();
     }
 
     private LinearLayout section(String title) {

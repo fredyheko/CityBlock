@@ -47,6 +47,46 @@ public final class PmCore {
         return base + "/cases/open?APP_UID=" + c.uid + "&DEL_INDEX=" + c.delIndex + "&action=" + action;
     }
 
+    /** Страница, которую PM открывает перед Claim (запоминает заявку в сессии). */
+    public static String catchOpenUrl(String base, Case c) {
+        return base + "/cases/cases_Open?APP_UID=" + c.uid + "&DEL_INDEX=" + c.delIndex + "&action=unassigned";
+    }
+
+    public static String catchExecutePath() { return "/cases/cases_CatchExecute"; }
+
+    /** Тело запроса Claim — как отправляет кнопка «Claim this case» на сайте. */
+    public static String claimPost(Case c) {
+        return "notValidateThisFields=" + enc("[]") + "&DynaformRequiredFields=" + enc("[]")
+                + "&DynaformName=cases_Resume"
+                + "&" + enc("form[APP_UID]") + "=" + enc(c.uid)
+                + "&" + enc("form[APP_NUMBER]") + "=" + enc(c.number)
+                + "&" + enc("form[BTN_CATCH]") + "=" + enc("Claim this case");
+    }
+
+    /** Форма текущего этапа на весь экран, без оболочки PM. */
+    public static String formUrl(String base, String uid, String delIndex) {
+        return base + "/cases/cases_Open?APP_UID=" + uid + "&DEL_INDEX=" + delIndex + "&action=todo";
+    }
+
+    /** PM вернулся к списку заявок — значит, этап отправлен (Continue). */
+    public static boolean isCaseListUrl(String url) {
+        return url != null && (url.contains("/cases/casesListExtJs") || url.contains("/cases/main")
+                || url.contains("/cases/casesList"));
+    }
+
+    public static Case findByUid(List<Case> cases, String uid) {
+        for (Case c : cases) if (uid != null && uid.equals(c.uid)) return c;
+        return null;
+    }
+
+    static String enc(String s) {
+        try {
+            return java.net.URLEncoder.encode(s == null ? "" : s, "UTF-8");
+        } catch (Exception e) {
+            return s;
+        }
+    }
+
     /** Части заголовка «client02 : RISCANI, STR…, 13, 1 : Aditional : 4 noiembrie 2026 | 14-18». */
     public static final class Title {
         public String account = "", address = "", type = "", date = "", slot = "";
