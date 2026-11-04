@@ -133,6 +133,23 @@ public class CoreTest {
         check(PmCore.isCaseListUrl(base + "/cases/casesListExtJs") && !PmCore.isCaseListUrl(base + "/cases/cases_Step?TYPE=ASSIGN_TASK"), "case list url");
         check(PmCore.findByUid(Arrays.asList(cl), cl.uid) == cl && PmCore.findByUid(Arrays.asList(cl), "x") == null, "find by uid");
 
+        // --- New case
+        String tree = "[{\"text\":\"Dashboard\",\"id\":\"cat1\",\"children\":["
+            + "{\"text\":\"Cabinet Personal (Vizualizare date personale)\",\"pro_uid\":\"p1\",\"tas_uid\":\"t1\",\"leaf\":true},"
+            + "{\"text\":\"Diagnostica (Diagnostica Client)\",\"pro_uid\":\"p2\",\"tas_uid\":\"t2\",\"leaf\":true}]},"
+            + "{\"text\":\"Warehouse management\",\"children\":[{\"text\":\"EQMovement (Versiunea noua)\",\"pro_uid\":\"p3\",\"tas_uid\":\"t3\"}]}]";
+        List<PmCore.StartItem> st = PmCore.parseStartList(tree);
+        check(st.size() == 3 && st.get(0).category.equals("Dashboard") && st.get(0).tasUid.equals("t1")
+            && st.get(2).category.equals("Warehouse management") && st.get(2).title.equals("EQMovement (Versiunea noua)"), "start list");
+        check(PmCore.startCasePost(st.get(1)).equals("action=startCase&processId=p2&taskId=t2"), "start post");
+        String[] started = PmCore.parseStarted("{\"status\":\"success\",\"openCase\":{\"PAGE\":\"..\\/cases\\/open?APP_UID=0123456789abcdef0123456789abcdef&DEL_INDEX=1&action=draft\"}}");
+        check(started[0].equals("0123456789abcdef0123456789abcdef") && started[1].equals("1"), "parse started");
+        String[] started2 = PmCore.parseStarted("{\"APPLICATION\":\"x\",\"APP_UID\":\"fedcba9876543210fedcba9876543210\",\"DEL_INDEX\":\"3\"}");
+        check(started2[0].startsWith("fedcba") && started2[1].equals("3"), "parse started json fields");
+        try { PmCore.parseStarted("{\"status\":\"failure\",\"message\":\"No permission\"}"); check(false, "start error"); }
+        catch (Exception e) { check(e.getMessage().equals("No permission"), "start error message"); }
+        check(PmCore.formUrl(base, "u", "1", "draft").endsWith("APP_UID=u&DEL_INDEX=1&action=draft"), "draft form url");
+
         if (a.length > 0) {
             Files.write(Paths.get(a[0], "fill_ok.js"), LoginJs.fill("tehnician.test", "se\"cr'et\\").getBytes("UTF-8"));
             Files.write(Paths.get(a[0], "fill_bad.js"), LoginJs.fill("tehnician.test", "wrong").getBytes("UTF-8"));

@@ -153,10 +153,12 @@ public class CaseActivity extends Activity {
         // --- действия
         String base = new Prefs(this).base();
         boolean unassigned = "unassigned".equals(action);
-        Button main = Ui.button(this, unassigned ? "✋  Взять заявку" : "📝  Заполнить заявку", 0xFFFFFFFF, Ui.ACCENT);
+        boolean draft = "draft".equals(action);
+        Button main = Ui.button(this, unassigned ? "✋  Взять заявку"
+                : draft ? "📝  Продолжить заполнение" : "📝  Заполнить заявку", 0xFFFFFFFF, Ui.ACCENT);
         main.setOnClickListener(v -> {
             if (unassigned) confirmClaim(main);
-            else startActivity(WebActivity.formIntent(this, c));
+            else startActivity(WebActivity.formIntent(this, c, draft ? "draft" : "todo"));
         });
         LinearLayout.LayoutParams lp = Ui.gapTop(this, 16);
         lp.height = Ui.dp(this, 52);

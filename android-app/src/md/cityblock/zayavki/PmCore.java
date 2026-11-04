@@ -65,7 +65,86 @@ public final class PmCore {
 
     /** Форма текущего этапа на весь экран, без оболочки PM. */
     public static String formUrl(String base, String uid, String delIndex) {
-        return base + "/cases/cases_Open?APP_UID=" + uid + "&DEL_INDEX=" + delIndex + "&action=todo";
+        return formUrl(base, uid, delIndex, "todo");
+    }
+
+    public static String formUrl(String base, String uid, String delIndex, String action) {
+        return base + "/cases/cases_Open?APP_UID=" + uid + "&DEL_INDEX=" + delIndex + "&action=" + action;
+    }
+
+    // ------------------------------------------------------------------ New case
+    public static final class StartItem {
+        public String category = "", title = "", proUid = "", tasUid = "";
+    }
+
+    public static String startAjaxPath() { return "/cases/casesStartPage_Ajax"; }
+
+    /** Страница «New case» самого PM — запасной вариант. */
+    public static String startPageUrl(String base) { return base + "/cases/casesStartPage?action=startCase"; }
+
+    public static String startListPost() { return "action=getProcessList&node=root"; }
+
+    public static String startCasePost(StartItem it) {
+        return "action=startCase&processId=" + enc(it.proUid) + "&taskId=" + enc(it.tasUid);
+    }
+
+    /** Список процессов из ответа getProcessList (дерево «категория → процесс»). */
+    public static List<StartItem> parseStartList(String body) throws Exception {
+        String t = body == null ? "" : body.trim();
+        if (!t.startsWith("[") && !t.startsWith("{")) throw new Exception("Неожиданный ответ: "
+                + t.substring(0, Math.min(120, t.length())));
+        Object root = t.startsWith("[") ? new JSONArray(t) : new JSONObject(t);
+        List<StartItem> out = new ArrayList<>();
+        walkStart(root, "", out);
+        return out;
+    }
+
+    private static void walkStart(Object o, String category, List<StartItem> out) {
+        if (o instanceof JSONArray) {
+            JSONArray a = (JSONArray) o;
+            for (int i = 0; i < a.length(); i++) walkStart(a.opt(i), category, out);
+            return;
+        }
+        if (!(o instanceof JSONObject)) return;
+        JSONObject j = (JSONObject) o;
+        String text = pick(j, "text", "label", "title", "PRO_TITLE", "name");
+        String tas = pick(j, "tas_uid", "TAS_UID", "taskId", "task_uid");
+        String pro = pick(j, "pro_uid", "PRO_UID", "processId", "process_uid");
+        if (!tas.isEmpty() && !pro.isEmpty()) {
+            StartItem it = new StartItem();
+            it.category = category;
+            it.title = text;
+            it.tasUid = tas;
+            it.proUid = pro;
+            out.add(it);
+        }
+        String childCat = (tas.isEmpty() && !text.isEmpty()) ? text : category;
+        for (String k : new String[]{"children", "data", "processes", "items"}) {
+            Object ch = j.opt(k);
+            if (ch != null) walkStart(ch, childCat, out);
+        }
+    }
+
+    private static final java.util.regex.Pattern APP_UID_RE =
+            java.util.regex.Pattern.compile("APP_UID[\"'=:\\s]+([0-9a-f]{32})", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern DEL_RE =
+            java.util.regex.Pattern.compile("DEL_INDEX[\"'=:\\s]+(\\d+)", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** Из ответа startCase достать {APP_UID, DEL_INDEX} новой заявки, или сообщение об ошибке. */
+    public static String[] parseStarted(String body) throws Exception {
+        String t = body == null ? "" : body.replace("\\/", "/");
+        java.util.regex.Matcher a = APP_UID_RE.matcher(t);
+        if (a.find()) {
+            java.util.regex.Matcher d = DEL_RE.matcher(t);
+            return new String[]{a.group(1), d.find() ? d.group(1) : "1"};
+        }
+        String msg = "";
+        try {
+            JSONObject o = new JSONObject(t.trim());
+            msg = o.optString("message", o.optString("msg", ""));
+        } catch (Exception ignored) {
+        }
+        throw new Exception(msg.isEmpty() ? "Сайт не вернул номер новой заявки" : msg);
     }
 
     /** PM вернулся к списку заявок — значит, этап отправлен (Continue). */

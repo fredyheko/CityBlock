@@ -25,11 +25,13 @@ public class WebActivity extends Activity {
     static final String EXTRA_FORM_UID = "formUid";
     static final String EXTRA_FORM_DEL = "formDel";
     static final String EXTRA_NUMBER = "number";
+    static final String EXTRA_FORM_ACTION = "formAction";
     private WebView web;
 
     // режим формы: этапы заявки на весь экран, без оболочки PM
     private String formUid;
     private String formDel;
+    private String formAction = "todo";
     private String number;
     private boolean checkingNext = false;
     private boolean wide = false; // «как на компьютере»
@@ -39,10 +41,15 @@ public class WebActivity extends Activity {
     }
 
     static Intent formIntent(Context ctx, PmCore.Case c) {
+        return formIntent(ctx, c, "todo");
+    }
+
+    static Intent formIntent(Context ctx, PmCore.Case c, String action) {
         return new Intent(ctx, WebActivity.class)
                 .putExtra(EXTRA_FORM_UID, c.uid)
                 .putExtra(EXTRA_FORM_DEL, c.delIndex)
-                .putExtra(EXTRA_NUMBER, c.number);
+                .putExtra(EXTRA_NUMBER, c.number)
+                .putExtra(EXTRA_FORM_ACTION, action);
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -52,9 +59,12 @@ public class WebActivity extends Activity {
         formUid = getIntent().getStringExtra(EXTRA_FORM_UID);
         formDel = getIntent().getStringExtra(EXTRA_FORM_DEL);
         number = getIntent().getStringExtra(EXTRA_NUMBER);
+        String fa = getIntent().getStringExtra(EXTRA_FORM_ACTION);
+        if (fa != null) formAction = fa;
         if (b != null) {
             formUid = b.getString(EXTRA_FORM_UID, formUid);
             formDel = b.getString(EXTRA_FORM_DEL, formDel);
+            formAction = b.getString(EXTRA_FORM_ACTION, formAction);
         }
         web = new WebView(this);
         WebSettings s = web.getSettings();
@@ -92,7 +102,7 @@ public class WebActivity extends Activity {
         updateTitle();
         if (b != null) web.restoreState(b);
         else if (formUid != null) {
-            web.loadUrl(PmCore.formUrl(new Prefs(this).base(), formUid, formDel));
+            web.loadUrl(PmCore.formUrl(new Prefs(this).base(), formUid, formDel, formAction));
         } else {
             String url = getIntent().getStringExtra(EXTRA_URL);
             web.loadUrl(url != null ? url : PmCore.homeUrl(new Prefs(this).base()));
@@ -113,6 +123,7 @@ public class WebActivity extends Activity {
                 if (isFinishing()) return;
                 if (mine != null && !mine.delIndex.equals(prevDel)) {
                     formDel = mine.delIndex;
+                    formAction = "todo";
                     Toast.makeText(this, "Следующий этап", Toast.LENGTH_SHORT).show();
                     web.loadUrl(PmCore.formUrl(new Prefs(this).base(), uid, formDel));
                     updateTitle();
@@ -126,7 +137,7 @@ public class WebActivity extends Activity {
 
     private void updateTitle() {
         if (Recorder.on) setTitle("● Запись: " + Recorder.size());
-        else if (formUid != null) setTitle("Заявка #" + (number == null ? "" : number));
+        else if (formUid != null) setTitle(number == null || number.isEmpty() ? "Новая заявка" : "Заявка #" + number);
         else setTitle("ProcessMaker");
     }
 
@@ -193,7 +204,7 @@ public class WebActivity extends Activity {
                 PmCore.Case c = new PmCore.Case();
                 c.uid = formUid;
                 c.delIndex = formDel;
-                String url = PmCore.openCaseUrl(new Prefs(this).base(), c, "todo");
+                String url = PmCore.openCaseUrl(new Prefs(this).base(), c, formAction);
                 formUid = null; // дальше — обычный режим PM
                 web.getSettings().setUseWideViewPort(true);
                 web.getSettings().setLoadWithOverviewMode(true);
@@ -238,6 +249,7 @@ public class WebActivity extends Activity {
         if (formUid != null) {
             out.putString(EXTRA_FORM_UID, formUid);
             out.putString(EXTRA_FORM_DEL, formDel);
+            out.putString(EXTRA_FORM_ACTION, formAction);
         }
     }
 

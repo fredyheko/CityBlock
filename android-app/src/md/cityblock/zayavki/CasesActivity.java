@@ -28,8 +28,8 @@ import java.util.concurrent.Executors;
 
 /** Главный экран: заявки карточками, вкладки Unassigned / Inbox. */
 public class CasesActivity extends Activity {
-    static final String[] TABS = {"unassigned", "todo"};
-    static final String[] TAB_NAMES = {"Unassigned", "Inbox"};
+    static final String[] TABS = {"unassigned", "todo", "draft"};
+    static final String[] TAB_NAMES = {"Unassigned", "Inbox", "Draft"};
     private static final long AUTO_REFRESH_MS = 60_000;
 
     /** Подробности заявок, загруженные за время работы приложения. */
@@ -50,7 +50,7 @@ public class CasesActivity extends Activity {
     private LinearLayout list;
     private TextView status;
     private Button[] tabButtons = new Button[TABS.length];
-    private final int[] counts = {-1, -1};
+    private final int[] counts = {-1, -1, -1};
 
     @Override
     protected void onCreate(Bundle b) {
@@ -69,11 +69,22 @@ public class CasesActivity extends Activity {
             final String t = TABS[i];
             Button btn = Ui.button(this, TAB_NAMES[i], Ui.TEXT, Ui.CARD);
             btn.setOnClickListener(v -> switchTab(t));
+            btn.setTextSize(14);
+            btn.setMaxLines(1);
+            btn.setAutoSizeTextTypeUniformWithConfiguration(10, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+            btn.setPadding(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1);
-            if (i > 0) lp.leftMargin = Ui.dp(this, 8);
+            if (i > 0) lp.leftMargin = Ui.dp(this, 6);
             tabs.addView(btn, lp);
             tabButtons[i] = btn;
         }
+        Button plus = Ui.button(this, "+", 0xFFFFFFFF, Ui.GREEN);
+        plus.setTextSize(24);
+        plus.setPadding(0, 0, 0, 0);
+        plus.setOnClickListener(v -> newCase());
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(Ui.dp(this, 48), Ui.dp(this, 44));
+        plp.leftMargin = Ui.dp(this, 6);
+        tabs.addView(plus, plp);
         root.addView(tabs, Ui.matchWrap());
 
         status = Ui.text(this, "", 13, Ui.MUTED, false);
@@ -275,6 +286,96 @@ public class CasesActivity extends Activity {
 
         card.setOnClickListener(v -> startActivity(CaseActivity.intent(this, c, tab)));
         return card;
+    }
+
+    // ------------------------------------------------------------------ New case
+    private void newCase() {
+        android.app.AlertDialog loading = new android.app.AlertDialog.Builder(this)
+                .setTitle("Новая заявка").setMessage("Загружаю список процессов…").show();
+        pool.execute(() -> {
+            try {
+                List<PmCore.StartItem> items = PmSession.startList(this);
+                main.post(() -> {
+                    loading.dismiss();
+                    if (!isFinishing()) chooseProcess(items);
+                });
+            } catch (Exception e) {
+                main.post(() -> {
+                    loading.dismiss();
+                    if (!isFinishing()) startFallback(e.getMessage());
+                });
+            }
+        });
+    }
+
+    private void chooseProcess(List<PmCore.StartItem> items) {
+        ScrollView sv = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 8));
+        sv.addView(box);
+        android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this)
+                .setTitle("Какую заявку создать?").setView(sv)
+                .setNegativeButton("Отмена", null).create();
+        String lastCat = null;
+        for (PmCore.StartItem it : items) {
+            if (!it.category.equals(lastCat)) {
+                lastCat = it.category;
+                if (!lastCat.isEmpty()) {
+                    TextView h = Ui.text(this, lastCat.toUpperCase(), 12, Ui.ACCENT, true);
+                    h.setPadding(Ui.dp(this, 8), Ui.dp(this, 14), 0, Ui.dp(this, 4));
+                    box.addView(h, Ui.matchWrap());
+                }
+            }
+            TextView row = Ui.text(this, it.title, 16, Ui.TEXT, false);
+            row.setPadding(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12));
+            row.setBackground(Ui.rounded(this, Ui.BG, 0, 10));
+            row.setOnClickListener(v -> {
+                dlg.dismiss();
+                confirmStart(it);
+            });
+            box.addView(row, Ui.gapTop(this, 6));
+        }
+        dlg.show();
+    }
+
+    private void confirmStart(PmCore.StartItem it) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Создать заявку?")
+                .setMessage(it.title)
+                .setPositiveButton("Start case", (d, w) -> start(it))
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void start(PmCore.StartItem it) {
+        status.setText("Создаю заявку «" + it.title + "»…");
+        pool.execute(() -> {
+            try {
+                String[] r = PmSession.startCase(this, it);
+                main.post(() -> {
+                    PmCore.Case c = new PmCore.Case();
+                    c.uid = r[0];
+                    c.delIndex = r[1];
+                    c.number = "";
+                    status.setText("Заявка создана — она во вкладке Draft, пока не отправлена");
+                    startActivity(WebActivity.formIntent(this, c, "draft"));
+                });
+            } catch (Exception e) {
+                main.post(() -> startFallback(e.getMessage()));
+            }
+        });
+    }
+
+    /** Если не получилось своими силами — страница New case самого PM. */
+    private void startFallback(String error) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Не получилось")
+                .setMessage(error + "\n\nОткрыть страницу «New case» в PM?")
+                .setPositiveButton("Открыть", (d, w) -> startActivity(WebActivity.intent(this,
+                        PmCore.startPageUrl(new Prefs(this).base()))))
+                .setNegativeButton("Отмена", null)
+                .show();
     }
 
     private void addChip(LinearLayout row, TextView chip) {

@@ -75,6 +75,28 @@ final class PmSession {
         return mine;
     }
 
+    /** Процессы, которые можно начать (New case). */
+    static List<PmCore.StartItem> startList(Context ctx) throws Exception {
+        init(ctx);
+        Prefs p = new Prefs(ctx);
+        cases(ctx, "draft"); // проверка входа
+        Net.Resp r = Net.request(p.base(), PmCore.startAjaxPath(), PmCore.startListPost());
+        if (r.code != 200) throw new Exception("Сайт ответил ошибкой " + r.code);
+        List<PmCore.StartItem> items = PmCore.parseStartList(r.body);
+        if (items.isEmpty()) throw new Exception("Список процессов пуст");
+        return items;
+    }
+
+    /** Начать заявку (Start Case). Возвращает {APP_UID, DEL_INDEX}. */
+    static String[] startCase(Context ctx, PmCore.StartItem it) throws Exception {
+        init(ctx);
+        Prefs p = new Prefs(ctx);
+        Net.Resp r = Net.request(p.base(), PmCore.startAjaxPath(), PmCore.startCasePost(it));
+        if (r.code >= 300 && r.code < 400 && r.location != null) return PmCore.parseStarted(r.location);
+        if (r.code != 200) throw new Exception("Сайт ответил ошибкой " + r.code);
+        return PmCore.parseStarted(r.body);
+    }
+
     /** Заявка в моём Inbox (после отправки этапа — с новым DEL_INDEX), или null. */
     static PmCore.Case findMine(Context ctx, String uid) {
         try {
