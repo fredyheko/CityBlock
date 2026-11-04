@@ -72,6 +72,7 @@ final class Store: ObservableObject {
             shown[act] = now
             cases = cs
             counts[act] = cs.count
+            if act == "unassigned" { BackgroundCheck.markSeen(cs) }
             let f = DateFormatter()
             f.dateFormat = "HH:mm"
             status = "Обновлено в " + f.string(from: Date())

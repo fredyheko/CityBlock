@@ -432,6 +432,7 @@ struct SettingsView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
     @State private var c = Config()
+    @State private var bg = BackgroundCheck.enabled
 
     var body: some View {
         NavigationStack {
@@ -444,6 +445,22 @@ struct SettingsView: View {
                     TextField("Адрес сайта", text: $c.host).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .keyboardType(.URL)
                     TextField("Workspace", text: $c.workspace).textInputAutocapitalization(.never).autocorrectionDisabled()
+                }
+                Section {
+                    Toggle("Уведомления в фоне (Unassigned)", isOn: $bg)
+                        .onChange(of: bg) { on in
+                            BackgroundCheck.enabled = on
+                            if on { Task { _ = await BackgroundCheck.requestPermission() } }
+                            BackgroundCheck.schedule()
+                        }
+                    if bg {
+                        Text("Последняя проверка: " + BackgroundCheck.lastStatus)
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                } header: {
+                    Text("Уведомления")
+                } footer: {
+                    Text("Когда проверять, решает iOS: иногда раз в 15–30 минут, иногда раз в несколько часов. Если смахнуть приложение из списка открытых, проверок не будет. В Настройках iPhone → ProcessMaker должно быть включено «Обновление контента». Для надёжных уведомлений используйте Telegram или письма от PM.")
                 }
                 Section {
                     Button("Сохранить") {
