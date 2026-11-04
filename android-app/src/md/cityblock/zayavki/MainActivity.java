@@ -126,9 +126,16 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
             ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (Exception ignored) {
         }
-        TextView version = Ui.text(this, "Заявки PM, версия " + ver, 12, Ui.MUTED, false);
+        android.widget.ImageView logo = new android.widget.ImageView(this);
+        logo.setImageResource(R.drawable.logo_full);
+        logo.setAdjustViewBounds(true);
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(dp(120), ViewGroup.LayoutParams.WRAP_CONTENT);
+        llp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        llp.topMargin = dp(28);
+        root.addView(logo, llp);
+        TextView version = Ui.text(this, "ProcessMaker для телефона, версия " + ver, 12, Ui.MUTED, false);
         version.setGravity(android.view.Gravity.CENTER);
-        root.addView(version, Ui.gapTop(this, 16));
+        root.addView(version, Ui.gapTop(this, 8));
 
         load();
         askNotificationPermission();
