@@ -28,6 +28,11 @@ final class Prefs {
     String tgToken() { return sp.getString("tgToken", "").trim(); }
     String tgChat() { return sp.getString("tgChat", "").trim(); }
 
+    boolean wgAuto() { return sp.getBoolean("wgAuto", false); }
+    String wgTunnel() { return sp.getString("wgTunnel", "").trim(); }
+    String vpnState() { return sp.getString("vpnState", ""); }
+    void setVpnState(String s) { sp.edit().putString("vpnState", s).apply(); }
+
     boolean enabled() { return sp.getBoolean("enabled", false); }
     void setEnabled(boolean v) { sp.edit().putBoolean("enabled", v).apply(); }
 

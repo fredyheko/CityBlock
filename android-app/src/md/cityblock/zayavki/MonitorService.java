@@ -41,6 +41,8 @@ public class MonitorService extends Service {
     private final AtomicBoolean checking = new AtomicBoolean(false);
     private final Runnable loopTick = this::triggerCheck;
     private PowerManager.WakeLock keepAwakeLock;
+    /** VPN только что включился — проверить заявки, когда туннель поднимется. */
+    private final VpnSwitch.Listener vpnListener = () -> main.postDelayed(this::triggerCheck, 8000);
     private Prefs prefs;
 
     static void start(Context ctx) {
@@ -100,6 +102,11 @@ public class MonitorService extends Service {
         }
         prefs.setEnabled(true);
         applyKeepAwake();
+        if (prefs.wgAuto()) {
+            VpnSwitch.start(this, vpnListener);
+        } else {
+            VpnSwitch.stop(this);
+        }
         triggerCheck();
         return START_STICKY;
     }
@@ -241,6 +248,7 @@ public class MonitorService extends Service {
     @Override
     public void onDestroy() {
         main.removeCallbacks(loopTick);
+        VpnSwitch.stop(this);
         if (!prefs.enabled()) {
             getSystemService(AlarmManager.class).cancel(AlarmReceiver.pending(this));
         }

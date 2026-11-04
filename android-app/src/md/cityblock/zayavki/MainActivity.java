@@ -28,9 +28,9 @@ import android.widget.Toast;
 /** Экран настроек: логин, пароль, интервал, Telegram; запуск/остановка. */
 public class MainActivity extends Activity implements SharedPreferences.OnSharedPreferenceChangeListener {
     private Prefs prefs;
-    private EditText host, workspace, user, pass, interval, tgToken, tgChat;
+    private EditText host, workspace, user, pass, interval, tgToken, tgChat, wgTunnel;
     private RadioButton rbUnassigned, rbInbox;
-    private Switch keepAwake, notifyExisting;
+    private Switch keepAwake, notifyExisting, wgAuto;
     private TextView status;
     private LinearLayout root;
     private LinearLayout box;
@@ -84,6 +84,18 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         header("Telegram (необязательно)");
         tgToken = field("Токен бота от @BotFather", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
         tgChat = field("Chat ID (несколько — через запятую)", InputType.TYPE_CLASS_TEXT);
+
+        header("VPN (WireGuard)");
+        wgAuto = toggle("Включать VPN на мобильном интернете, выключать на Wi-Fi");
+        wgTunnel = field("Имя туннеля — точно как в списке WireGuard", InputType.TYPE_CLASS_TEXT);
+        box.addView(Ui.text(this, "В WireGuard: ⋮ → Настройки → включите «Allow remote control apps». "
+                + "«Постоянная VPN» в настройках Android для WireGuard должна быть выключена.", 12, Ui.MUTED, false),
+                Ui.gapTop(this, 6));
+        Button testVpn = Ui.button(this, "Проверить: включить VPN", Ui.ACCENT, Ui.ACCENT_BG);
+        testVpn.setOnClickListener(v -> testVpn());
+        LinearLayout.LayoutParams tlp = Ui.gapTop(this, 10);
+        tlp.height = dp(44);
+        box.addView(testVpn, tlp);
 
         header("Сайт");
         host = field("Адрес сайта", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
@@ -141,7 +153,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
-        if ("status".equals(key) || "enabled".equals(key)) runOnUiThread(this::showStatus);
+        if ("status".equals(key) || "enabled".equals(key) || "vpnState".equals(key)) runOnUiThread(this::showStatus);
         if ("diag".equals(key) && diagWaiting) {
             diagWaiting = false;
             runOnUiThread(this::showDiag);
@@ -173,7 +185,8 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         boolean on = prefs.enabled();
         String detail = prefs.status();
         status.setText((on ? "● Мониторинг включён" : "○ Мониторинг выключен")
-                + (detail.equals("Мониторинг выключен") ? "" : "\n" + detail));
+                + (detail.equals("Мониторинг выключен") ? "" : "\n" + detail)
+                + (prefs.wgAuto() && !prefs.vpnState().isEmpty() ? "\n🔒 " + prefs.vpnState() : ""));
         status.setTextColor(on ? Ui.GREEN : Ui.MUTED);
         status.setBackground(Ui.rounded(this, on ? Ui.GREEN_BG : Ui.CARD, on ? 0 : Ui.BORDER, 14));
     }
@@ -189,6 +202,8 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         notifyExisting.setChecked(prefs.notifyExisting());
         tgToken.setText(prefs.tgToken());
         tgChat.setText(prefs.tgChat());
+        wgAuto.setChecked(prefs.wgAuto());
+        wgTunnel.setText(prefs.wgTunnel());
     }
 
     private boolean save() {
@@ -222,7 +237,20 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
                 .putBoolean("keepAwake", keepAwake.isChecked())
                 .putBoolean("notifyExisting", notifyExisting.isChecked())
                 .putString("tgToken", tgToken.getText().toString().trim())
-                .putString("tgChat", tgChat.getText().toString().trim());
+                .putString("tgChat", tgChat.getText().toString().trim())
+                .putBoolean("wgAuto", wgAuto.isChecked())
+                .putString("wgTunnel", wgTunnel.getText().toString().trim());
+        if (wgAuto.isChecked()) {
+            if (wgTunnel.getText().toString().trim().isEmpty()) {
+                toast("Укажите имя туннеля WireGuard");
+                return false;
+            }
+            if (!VpnSwitch.installed(this)) {
+                toast("WireGuard не установлен");
+                return false;
+            }
+            askVpnPermission();
+        }
         if (accountChanged || listChanged) e.remove("seen").putInt("failures", 0);
         e.apply();
         if (accountChanged) CookieManager.getInstance().removeAllCookies(null);
@@ -233,6 +261,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         if (!save()) return;
         MonitorService.start(this);
         toast("Мониторинг запущен");
+        if (prefs.wgAuto() && VpnSwitch.permitted(this)) VpnSwitch.apply(this, null, true);
         PowerManager pm = getSystemService(PowerManager.class);
         if (pm.isIgnoringBatteryOptimizations(getPackageName())) {
             openCases();
@@ -242,6 +271,42 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     }
 
     // ------------------------------------------------------------------ разрешения
+    private void askVpnPermission() {
+        if (VpnSwitch.installed(this) && !VpnSwitch.permitted(this)) {
+            requestPermissions(new String[]{VpnSwitch.PERMISSION}, 2);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        super.onRequestPermissionsResult(code, perms, results);
+        if (code == 2) {
+            if (VpnSwitch.permitted(this)) {
+                toast("Разрешение получено");
+                VpnSwitch.apply(this, null, true);
+            } else {
+                toast("Без разрешения приложение не сможет управлять WireGuard");
+            }
+        }
+    }
+
+    private void testVpn() {
+        String tunnel = wgTunnel.getText().toString().trim();
+        if (!VpnSwitch.installed(this)) { toast("WireGuard не установлен"); return; }
+        if (!VpnSwitch.permitted(this)) { askVpnPermission(); return; }
+        String err = VpnSwitch.send(this, tunnel, true);
+        if (err != null) {
+            toast(err);
+        } else {
+            new AlertDialog.Builder(this)
+                    .setTitle("Команда отправлена")
+                    .setMessage("Если в шторке появился значок ключа 🔑 и туннель «" + tunnel + "» включился в WireGuard — всё работает.\n\n"
+                            + "Если нет: проверьте имя туннеля (с учётом больших и маленьких букв) и что в WireGuard включено «Allow remote control apps».")
+                    .setPositiveButton("OK", null)
+                    .show();
+        }
+    }
+
     private void askNotificationPermission() {
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
