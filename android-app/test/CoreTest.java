@@ -1,0 +1,65 @@
+package md.cityblock.zayavki;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
+
+/** Тесты логики на обычной JVM: java -cp json.jar:... md.cityblock.zayavki.CoreTest <dir> */
+public class CoreTest {
+    static int fails = 0;
+    static void check(boolean ok, String name) {
+        System.out.println((ok ? "  ok   " : "  FAIL ") + name);
+        if (!ok) fails++;
+    }
+
+    public static void main(String[] a) throws Exception {
+        String base = PmCore.base("pm1.starnet.md/", "starnet");
+        check(base.equals("https://pm1.starnet.md/sysstarnet/en/neoclassic"), "base url: " + base);
+        check(PmCore.listUrl(base, "unassigned").endsWith("/cases/proxyCasesList?action=unassigned&start=0&limit=100&sort=APP_NUMBER&dir=DESC"), "list url");
+
+        String json = "{\"totalCount\":2,\"data\":[" +
+            "{\"APP_UID\":\"u2\",\"APP_NUMBER\":16602,\"DEL_INDEX\":2,\"APP_TITLE\":\"client03 : RISCANI, STR. TEILOR, 11\",\"APP_PRO_TITLE\":\"Conectare Client Home (Epicor)\",\"APP_TAS_TITLE\":\"Selectare Operatiune\",\"APP_DEL_PREVIOUS_USER\":\"Dispecer, Test\",\"DEL_TASK_DUE_DATE\":\"2026-11-04 17:00:00\"}," +
+            "{\"APP_UID\":\"u1\",\"APP_NUMBER\":\"16601\",\"DEL_INDEX\":\"2\",\"APP_TITLE\":\"client01 : RISCANI <b>\",\"APP_PRO_TITLE\":null}]}";
+        List<PmCore.Case> cs = PmCore.parse(json, base + "/cases/proxyCasesList");
+        check(cs.size() == 2, "parse 2 cases");
+        check(cs.get(0).number.equals("16602") && cs.get(0).key.equals("u2:2"), "numeric fields -> strings, key");
+        check(cs.get(1).process.isEmpty(), "null field -> empty");
+
+        Set<String> seen = new HashSet<>(Collections.singleton("u1:2"));
+        List<PmCore.Case> fresh = PmCore.newCases(cs, seen);
+        check(fresh.size() == 1 && fresh.get(0).number.equals("16602"), "only new case reported");
+        check(PmCore.newCases(cs, PmCore.keys(cs, new HashSet<>())).isEmpty(), "no repeats on next check");
+        List<PmCore.Case> all = PmCore.newCases(cs, new HashSet<>());
+        check(all.get(0).number.equals("16601"), "new cases ordered oldest first");
+
+        check(PmCore.telegramHtml(cs.get(1), "https://x").contains("RISCANI &lt;b&gt;"), "telegram html escaped");
+        System.out.println(PmCore.details(cs.get(0)).replace("\n", " | "));
+
+        check(PmCore.parse("{\"data\":[]}", base).isEmpty(), "empty list");
+        check(throwsExpired("<html><form><input name=\"form[USR_USERNAME]\"></form></html>", base), "login html -> session expired");
+        check(throwsExpired("{\"data\":[]}", base + "/login/login"), "redirected to login -> session expired");
+        check(throwsExpired("{\"success\":false,\"message\":\"Session expired, please login\"}", base), "json session msg -> expired");
+        try { PmCore.parse("Internal error", base); check(false, "garbage -> error"); }
+        catch (PmCore.SessionExpired e) { check(false, "garbage -> error"); }
+        catch (Exception e) { check(true, "garbage -> error: " + e.getMessage()); }
+
+        check(LoginJs.result("\"submitted\"").equals("submitted"), "js result decode");
+        check(LoginJs.result("null").isEmpty(), "js null");
+        check(LoginJs.result("\"a\\\"b\\nc\"").equals("a\"b\nc"), "js escapes");
+
+        if (a.length > 0) {
+            Files.write(Paths.get(a[0], "fill_ok.js"), LoginJs.fill("tehnician.test", "se\"cr'et\\").getBytes("UTF-8"));
+            Files.write(Paths.get(a[0], "fill_bad.js"), LoginJs.fill("tehnician.test", "wrong").getBytes("UTF-8"));
+            Files.write(Paths.get(a[0], "has_pw.js"), LoginJs.HAS_PASSWORD.getBytes("UTF-8"));
+            Files.write(Paths.get(a[0], "error.js"), LoginJs.ERROR.getBytes("UTF-8"));
+        }
+        System.out.println(fails == 0 ? "ALL PASSED" : fails + " FAILED");
+        System.exit(fails == 0 ? 0 : 1);
+    }
+
+    static boolean throwsExpired(String body, String url) {
+        try { PmCore.parse(body, url); return false; }
+        catch (PmCore.SessionExpired e) { return true; }
+        catch (Exception e) { return false; }
+    }
+}
