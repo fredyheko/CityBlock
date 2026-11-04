@@ -13,7 +13,11 @@ public final class PmCore {
     private PmCore() {}
 
     public static final class Case {
-        public String key, number, title, process, task, sentBy, due;
+        public String key, uid, delIndex, number, title, process, task, sentBy, due;
+        /** Заполняются отдельно (CaseDetails) — для новых заявок. */
+        public List<String> phones = new ArrayList<>();
+        public String description = "";
+        public List<String> notes = new ArrayList<>();
     }
 
     /** Сессия истекла — нужно войти заново. */
@@ -80,6 +84,8 @@ public final class PmCore {
         c.number = pick(r, "APP_NUMBER", "app_number");
         String uid = pick(r, "APP_UID", "app_uid");
         String delIndex = pick(r, "DEL_INDEX", "del_index");
+        c.uid = uid;
+        c.delIndex = delIndex.isEmpty() ? "1" : delIndex;
         c.title = pick(r, "APP_TITLE", "CASE_TITLE", "APP_TITLE_SHORT");
         c.process = pick(r, "APP_PRO_TITLE", "PRO_TITLE");
         c.task = pick(r, "APP_TAS_TITLE", "TAS_TITLE");
@@ -116,6 +122,12 @@ public final class PmCore {
     public static String details(Case c) {
         StringBuilder sb = new StringBuilder();
         line(sb, "📍 ", c.title);
+        for (String ph : c.phones) line(sb, "📞 ", CaseDetails.pretty(ph));
+        line(sb, "📋 ", CaseDetails.shorten(c.description, 700));
+        int shown = 0;
+        for (int i = c.notes.size() - 1; i >= 0 && shown < 3; i--, shown++) {
+            line(sb, "💬 ", CaseDetails.shorten(c.notes.get(i), 400));
+        }
         line(sb, "⚙️ ", c.process);
         line(sb, "📝 ", c.task);
         line(sb, "👤 ", c.sentBy);

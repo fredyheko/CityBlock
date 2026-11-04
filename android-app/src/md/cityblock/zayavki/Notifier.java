@@ -62,16 +62,24 @@ final class Notifier {
 
     static void newCase(Context ctx, PmCore.Case c) {
         int id = 1000 + (c.key.hashCode() & 0x0fffffff);
-        Notification n = new Notification.Builder(ctx, CH_CASES)
+        Notification.Builder b = new Notification.Builder(ctx, CH_CASES)
                 .setSmallIcon(R.drawable.ic_notify)
                 .setContentTitle("Новая заявка #" + c.number)
                 .setContentText(c.title)
                 .setStyle(new Notification.BigTextStyle().bigText(PmCore.details(c)))
                 .setCategory(Notification.CATEGORY_MESSAGE)
                 .setAutoCancel(true)
-                .setContentIntent(activity(ctx, WebActivity.class, 12))
-                .build();
-        ctx.getSystemService(NotificationManager.class).notify(id, n);
+                .setContentIntent(activity(ctx, WebActivity.class, 12));
+        if (!c.phones.isEmpty()) {
+            String ph = c.phones.get(0);
+            Intent dial = new Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + ph))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            PendingIntent dialPi = PendingIntent.getActivity(ctx, id, dial,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            b.addAction(new Notification.Action.Builder(null,
+                    "📞 Позвонить " + CaseDetails.pretty(ph), dialPi).build());
+        }
+        ctx.getSystemService(NotificationManager.class).notify(id, b.build());
     }
 
     static void error(Context ctx, String text) {

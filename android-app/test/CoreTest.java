@@ -47,6 +47,29 @@ public class CoreTest {
         check(LoginJs.result("null").isEmpty(), "js null");
         check(LoginJs.result("\"a\\\"b\\nc\"").equals("a\"b\nc"), "js escapes");
 
+        // --- телефоны и описание
+        List<String> ph = CaseDetails.findPhones("Tel: 069 123 456, +373 79-876-543; fix (022) 12-34-56; mob 68123456. "
+            + "Data 2026-11-04 17:00:00, caz 166012, uid 0a67812345b9c, str. 16, 1 : 4 noiembrie 2026 | 08-14");
+        check(ph.equals(Arrays.asList("069123456", "079876543", "022123456", "068123456")), "phones: " + ph);
+        check(CaseDetails.pretty("069123456").equals("+373 69 123 456"), "pretty phone");
+        check(CaseDetails.findPhones("2026-11-04 08:09:34 client01 166012 3456789012").isEmpty(), "no false phones");
+
+        String notes = "{\"success\":true,\"notes\":[{\"USR_FIRSTNAME\":\"Test\",\"USR_LASTNAME\":\"Dispecer\","
+            + "\"NOTE_DATE\":\"2026-11-04 08:09\",\"NOTE_CONTENT\":\"Client nou, sunati la 060 111 222<br>Instalare router\"}]}";
+        String summary = "<script>var x={\"descriere_lucrari\":\"Conectare internet 100Mb + TV\",\"APP_UID\":\"0123456789abcdef0123456789abcdef\","
+            + "\"descriere_label\":\"Descriere\",\"telefon_client\":\"+37369000111\",\"DEL_INIT_DATE\":\"2026-11-04\"};</script>"
+            + "<table><tr><td>Comentariu:</td><td>Etajul 3, interfon 12</td></tr></table>";
+        PmCore.Case k = cs.get(0);
+        CaseDetails.fill(k, Arrays.asList("notes", "summaryAjax", "summary"), Arrays.asList(notes, "", summary));
+        check(k.phones.equals(Arrays.asList("069000111", "060111222")), "case phones: " + k.phones);
+        check(k.description.equals("Conectare internet 100Mb + TV\nEtajul 3, interfon 12"), "description: " + k.description.replace("\n", " | "));
+        check(k.notes.size() == 1 && k.notes.get(0).startsWith("Test Dispecer, 2026-11-04 08:09: Client nou"), "notes: " + k.notes);
+        String det = PmCore.details(k);
+        check(det.contains("📞 +373 69 000 111") && det.contains("📋 Conectare") && det.contains("💬 Test"), "details text");
+        System.out.println(det);
+        CaseDetails.fill(k, Arrays.asList("notes", "summaryAjax", "summary"), Arrays.asList("<html>login</html>", "", null));
+        check(k.phones.isEmpty() && k.description.isEmpty() && k.notes.isEmpty(), "garbage responses -> empty, no crash");
+
         if (a.length > 0) {
             Files.write(Paths.get(a[0], "fill_ok.js"), LoginJs.fill("tehnician.test", "se\"cr'et\\").getBytes("UTF-8"));
             Files.write(Paths.get(a[0], "fill_bad.js"), LoginJs.fill("tehnician.test", "wrong").getBytes("UTF-8"));

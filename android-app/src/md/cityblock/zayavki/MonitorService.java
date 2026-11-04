@@ -34,6 +34,7 @@ public class MonitorService extends Service {
     static final String ACTION_START = "md.cityblock.zayavki.START";
     static final String ACTION_STOP = "md.cityblock.zayavki.STOP";
     static final String ACTION_CHECK = "md.cityblock.zayavki.CHECK";
+    static final String ACTION_DIAG = "md.cityblock.zayavki.DIAG";
 
     /** После скольких ошибок подряд показать уведомление об ошибке. */
     static final int ERROR_ALERT_AFTER = 3;
@@ -47,6 +48,10 @@ public class MonitorService extends Service {
 
     static void start(Context ctx) {
         ctx.startForegroundService(new Intent(ctx, MonitorService.class).setAction(ACTION_START));
+    }
+
+    static void diagnose(Context ctx) {
+        ctx.startForegroundService(new Intent(ctx, MonitorService.class).setAction(ACTION_DIAG));
     }
 
     static void stop(Context ctx) {
@@ -84,6 +89,16 @@ public class MonitorService extends Service {
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
+        }
+        if (ACTION_DIAG.equals(action)) {
+            worker.execute(this::runDiagnostics);
+            if (!prefs.enabled()) {
+                worker.execute(() -> main.post(() -> {
+                    stopForeground(STOP_FOREGROUND_REMOVE);
+                    stopSelf();
+                }));
+            }
+            return prefs.enabled() ? START_STICKY : START_NOT_STICKY;
         }
         if (!prefs.enabled() && intent != null && !ACTION_START.equals(action)) {
             stopSelf();
@@ -165,6 +180,7 @@ public class MonitorService extends Service {
             String tgError = null;
             if (!(first && !prefs.notifyExisting())) {
                 for (PmCore.Case c : fresh) {
+                    Net.fetchDetails(base, c, prefs.listAction(), null);
                     Notifier.newCase(this, c);
                     String e = Net.telegram(prefs.tgToken(), prefs.tgChat(),
                             PmCore.telegramHtml(c, PmCore.homeUrl(base)));
@@ -187,6 +203,35 @@ public class MonitorService extends Service {
             setStatus("Ошибка (" + n + " подряд): " + msg);
             if (n == ERROR_ALERT_AFTER) Notifier.error(this, msg);
         }
+    }
+
+    /** Диагностика: что сайт отдаёт по первой заявке в списке. Результат — в prefs "diag". */
+    private void runDiagnostics() {
+        StringBuilder d = new StringBuilder();
+        String base = prefs.base();
+        try {
+            if (!prefs.configured()) throw new Exception("Укажите логин и пароль");
+            List<PmCore.Case> cases;
+            try {
+                cases = Net.fetchCases(base, prefs.listAction());
+            } catch (PmCore.SessionExpired e) {
+                login(base);
+                cases = Net.fetchCases(base, prefs.listAction());
+            }
+            d.append("Заявок в списке: ").append(cases.size()).append('\n');
+            if (cases.isEmpty()) {
+                d.append("Список пуст — диагностику можно сделать, когда появится заявка.");
+            } else {
+                PmCore.Case c = cases.get(0);
+                d.append("Заявка #").append(c.number).append(" (").append(c.uid).append(", ")
+                        .append(c.delIndex).append(")\n");
+                Net.fetchDetails(base, c, prefs.listAction(), d);
+                d.append("\n══ Итог, как будет в уведомлении:\n").append(PmCore.details(c));
+            }
+        } catch (Exception e) {
+            d.append("Ошибка: ").append(e.getMessage());
+        }
+        prefs.sp.edit().putString("diag", d.toString()).putLong("diagAt", System.currentTimeMillis()).apply();
     }
 
     /** Вход через WebView (в главном потоке), ждём результат. */

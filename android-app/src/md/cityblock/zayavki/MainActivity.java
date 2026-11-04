@@ -34,6 +34,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     private Switch keepAwake, notifyExisting;
     private TextView status;
     private LinearLayout root;
+    private boolean diagWaiting = false;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -93,6 +94,13 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
             }
         });
         button("Открыть сайт", v -> startActivity(new Intent(this, WebActivity.class)));
+        button("Диагностика: что сайт отдаёт по заявке", v -> {
+            if (save()) {
+                diagWaiting = true;
+                MonitorService.diagnose(this);
+                toast("Собираю данные… (до минуты)");
+            }
+        });
         button("Остановить мониторинг", v -> {
             MonitorService.stop(this);
             toast("Мониторинг остановлен");
@@ -118,6 +126,31 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
         if ("status".equals(key) || "enabled".equals(key)) runOnUiThread(this::showStatus);
+        if ("diag".equals(key) && diagWaiting) {
+            diagWaiting = false;
+            runOnUiThread(this::showDiag);
+        }
+    }
+
+    private void showDiag() {
+        final String text = prefs.sp.getString("diag", "");
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextIsSelectable(true);
+        tv.setTextSize(12);
+        tv.setPadding(dp(16), dp(8), dp(16), dp(8));
+        ScrollView sv = new ScrollView(this);
+        sv.addView(tv);
+        new AlertDialog.Builder(this)
+                .setTitle("Диагностика")
+                .setView(sv)
+                .setPositiveButton("Копировать", (d, w) -> {
+                    android.content.ClipboardManager cm = getSystemService(android.content.ClipboardManager.class);
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("diag", text));
+                    toast("Скопировано — вставьте в чат");
+                })
+                .setNegativeButton("Закрыть", null)
+                .show();
     }
 
     private void showStatus() {
