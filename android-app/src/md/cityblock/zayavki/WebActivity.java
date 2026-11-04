@@ -32,6 +32,7 @@ public class WebActivity extends Activity {
     private String formDel;
     private String number;
     private boolean checkingNext = false;
+    private boolean wide = false; // «как на компьютере»
 
     static Intent intent(Context ctx, String url) {
         return new Intent(ctx, WebActivity.class).putExtra(EXTRA_URL, url);
@@ -78,6 +79,7 @@ public class WebActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (Recorder.on) view.evaluateJavascript(Recorder.HOOK_JS, null);
+                if (formUid != null && !wide) view.evaluateJavascript(FormFix.JS, null);
             }
 
             @Override
@@ -133,13 +135,18 @@ public class WebActivity extends Activity {
         m.add(0, 1, 0, Recorder.on ? "⏹ Остановить запись" : "⏺ Записать действия");
         m.add(0, 2, 0, "Показать запись");
         m.add(0, 3, 0, "Обновить страницу");
-        if (formUid != null) m.add(0, 4, 0, "Открыть в полном PM");
+        if (formUid != null) {
+            m.add(0, 5, 0, wide ? "📱 Мобильный вид" : "↔ Широкий вид (как на компьютере)");
+            m.add(0, 4, 0, "Открыть в полном PM");
+        }
         return true;
     }
 
     @Override
     public boolean onPrepareOptionsMenu(Menu m) {
         m.findItem(1).setTitle(Recorder.on ? "⏹ Остановить запись" : "⏺ Записать действия");
+        MenuItem w = m.findItem(5);
+        if (w != null) w.setTitle(wide ? "📱 Мобильный вид" : "↔ Широкий вид (как на компьютере)");
         updateTitle();
         return super.onPrepareOptionsMenu(m);
     }
@@ -174,6 +181,12 @@ public class WebActivity extends Activity {
                 showLog();
                 return true;
             case 3:
+                web.reload();
+                return true;
+            case 5:
+                wide = !wide;
+                web.getSettings().setUseWideViewPort(wide);
+                web.getSettings().setLoadWithOverviewMode(wide);
                 web.reload();
                 return true;
             case 4: {
