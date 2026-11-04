@@ -6,7 +6,6 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -34,6 +33,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     private Switch keepAwake, notifyExisting;
     private TextView status;
     private LinearLayout root;
+    private LinearLayout box;
     private boolean diagWaiting = false;
     private boolean returnToCases = false;
 
@@ -50,17 +50,16 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         setTitle("Настройки");
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(Ui.BG);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        int p = dp(16);
-        root.setPadding(p, p, p, p);
+        int p = dp(12);
+        root.setPadding(p, p, p, dp(32));
         scroll.addView(root);
         setContentView(scroll);
 
-        status = new TextView(this);
-        status.setTextSize(15);
-        status.setPadding(dp(12), dp(12), dp(12), dp(12));
-        status.setBackgroundColor(0x141565C0);
+        status = Ui.text(this, "", 15, Ui.TEXT, false);
+        status.setPadding(dp(14), dp(12), dp(14), dp(12));
         root.addView(status, lp());
 
         header("Вход в ProcessMaker");
@@ -77,7 +76,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         rbInbox.setId(View.generateViewId());
         rg.addView(rbUnassigned);
         rg.addView(rbInbox);
-        root.addView(rg, lp());
+        box.addView(rg, lp());
         interval = field("Проверять каждые N минут", InputType.TYPE_CLASS_NUMBER);
         keepAwake = toggle("Не давать телефону засыпать (уведомления без задержек, но расход батареи выше)");
         notifyExisting = toggle("При первом запуске сообщить и об уже висящих заявках");
@@ -90,10 +89,8 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         host = field("Адрес сайта", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         workspace = field("Workspace", InputType.TYPE_CLASS_TEXT);
 
-        View gap = new View(this);
-        root.addView(gap, new LinearLayout.LayoutParams(1, dp(12)));
-
-        button("Сохранить и запустить", v -> saveAndStart());
+        box = root;
+        primary("Сохранить и запустить", v -> saveAndStart());
         button("Проверить сейчас", v -> {
             if (save()) {
                 MonitorService.start(this);
@@ -111,6 +108,15 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
             MonitorService.stop(this);
             toast("Мониторинг остановлен");
         });
+
+        String ver = "";
+        try {
+            ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception ignored) {
+        }
+        TextView version = Ui.text(this, "Заявки PM, версия " + ver, 12, Ui.MUTED, false);
+        version.setGravity(android.view.Gravity.CENTER);
+        root.addView(version, Ui.gapTop(this, 16));
 
         load();
         askNotificationPermission();
@@ -164,8 +170,12 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     }
 
     private void showStatus() {
-        String state = prefs.enabled() ? "🟢 Мониторинг включён" : "⚪️ Мониторинг выключен";
-        status.setText(state + "\n" + prefs.status());
+        boolean on = prefs.enabled();
+        String detail = prefs.status();
+        status.setText((on ? "● Мониторинг включён" : "○ Мониторинг выключен")
+                + (detail.equals("Мониторинг выключен") ? "" : "\n" + detail));
+        status.setTextColor(on ? Ui.GREEN : Ui.MUTED);
+        status.setBackground(Ui.rounded(this, on ? Ui.GREEN_BG : Ui.CARD, on ? 0 : Ui.BORDER, 14));
     }
 
     private void load() {
@@ -269,43 +279,47 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
                 ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
+    /** Новая карточка-раздел с заголовком; поля дальше добавляются в неё. */
     private void header(String text) {
-        TextView t = new TextView(this);
-        t.setText(text);
-        t.setTextSize(13);
-        t.setTypeface(Typeface.DEFAULT_BOLD);
-        t.setTextColor(0xFF1565C0);
-        t.setPadding(0, dp(20), 0, dp(4));
-        root.addView(t, lp());
+        box = Ui.card(this);
+        box.addView(Ui.text(this, text.toUpperCase(), 12, Ui.ACCENT, true), lp());
+        root.addView(box, Ui.gapTop(this, 12));
     }
 
     private EditText field(String hint, int type) {
-        TextView label = new TextView(this);
-        label.setText(hint);
-        label.setTextSize(13);
-        label.setPadding(0, dp(6), 0, 0);
-        root.addView(label, lp());
+        box.addView(Ui.text(this, hint, 13, Ui.MUTED, false), Ui.gapTop(this, 10));
         EditText e = new EditText(this);
         e.setInputType(type);
         e.setSingleLine(true);
-        root.addView(e, lp());
+        e.setTextSize(16);
+        box.addView(e, lp());
         return e;
     }
 
     private Switch toggle(String text) {
         Switch s = new Switch(this);
         s.setText(text);
+        s.setTextSize(14);
         s.setPadding(0, dp(8), 0, dp(8));
-        root.addView(s, lp());
+        box.addView(s, Ui.gapTop(this, 4));
         return s;
     }
 
-    private void button(String text, View.OnClickListener l) {
-        Button btn = new Button(this);
-        btn.setText(text);
-        btn.setAllCaps(false);
+    private void primary(String text, View.OnClickListener l) {
+        Button btn = Ui.button(this, text, 0xFFFFFFFF, Ui.ACCENT);
         btn.setOnClickListener(l);
-        root.addView(btn, lp());
+        LinearLayout.LayoutParams lp = Ui.gapTop(this, 16);
+        lp.height = dp(52);
+        root.addView(btn, lp);
+    }
+
+    private void button(String text, View.OnClickListener l) {
+        Button btn = Ui.button(this, text, Ui.ACCENT, Ui.CARD);
+        btn.setBackground(Ui.rounded(this, Ui.CARD, Ui.BORDER, 10));
+        btn.setOnClickListener(l);
+        LinearLayout.LayoutParams lp = Ui.gapTop(this, 8);
+        lp.height = dp(48);
+        root.addView(btn, lp);
     }
 
     private void toast(String s) {
