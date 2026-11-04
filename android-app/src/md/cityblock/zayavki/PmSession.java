@@ -39,6 +39,20 @@ final class PmSession {
         }
     }
 
+    /** Страница списка; при истёкшей сессии входит заново. */
+    static PmCore.Page page(Context ctx, String action, int start, int limit) throws Exception {
+        init(ctx);
+        Prefs p = new Prefs(ctx);
+        if (!p.configured()) throw new Exception("Укажите логин и пароль в настройках");
+        String base = p.base();
+        try {
+            return Net.fetchPage(base, action, start, limit);
+        } catch (PmCore.SessionExpired e) {
+            login(ctx, base, p);
+            return Net.fetchPage(base, action, start, limit);
+        }
+    }
+
     /** Догрузить клиента, телефон, описание и заметки. Ошибки игнорируются. */
     static void details(Context ctx, PmCore.Case c, String action) {
         init(ctx);

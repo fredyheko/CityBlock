@@ -123,8 +123,12 @@ final class PmSession {
     }
 
     func fetchCases(_ action: String) async throws -> [PmCase] {
+        try await fetchPage(action, start: 0, limit: 100).cases
+    }
+
+    func fetchPage(_ action: String, start: Int, limit: Int) async throws -> (cases: [PmCase], total: Int) {
         if !hasCookies { throw SessionExpired() }
-        let r = try await request(PmCore.listUrl(config.base, action))
+        let r = try await request(PmCore.listUrl(config.base, action, start: start, limit: limit))
         if (300..<400).contains(r.code) {
             guard let loc = r.location, !loc.contains("login") else { throw SessionExpired() }
             throw PmError("Сайт перенаправил на \(loc)")
@@ -134,7 +138,21 @@ final class PmSession {
             if r.body.lowercased().contains("login") { throw SessionExpired() }
             throw PmError("Сайт ответил ошибкой \(r.code)" + (r.code == 403 ? " (нет VPN?)" : ""))
         }
-        return try PmCore.parse(r.body, finalUrl: r.url)
+        let cs = try PmCore.parse(r.body, finalUrl: r.url)
+        return (cs, PmCore.total(r.body, fallback: cs.count))
+    }
+
+    /// Страница списка; при истёкшей сессии входит заново.
+    func page(_ action: String, start: Int, limit: Int) async throws -> (cases: [PmCase], total: Int) {
+        guard config.configured else { throw PmError("Укажите логин и пароль в настройках") }
+        do {
+            return try await fetchPage(action, start: start, limit: limit)
+        } catch is SessionExpired {
+            try await login()
+            return try await fetchPage(action, start: start, limit: limit)
+        } catch let e as URLError {
+            throw PmError(Self.netMessage(e))
+        }
     }
 
     /// Список заявок; при истёкшей сессии входит заново.

@@ -47,7 +47,15 @@ public class CasesActivity extends Activity {
     private List<PmCore.Case> current = new ArrayList<>();
     private Set<String> fresh = new HashSet<>();
 
-    private LinearLayout list;
+    private android.widget.ListView listView;
+    private final CardsAdapter adapter = new CardsAdapter();
+    private TextView footer;
+    private TextView empty;
+    private int total = 0;
+    private boolean loadingMore = false;
+    /** Для каких заявок уже запросили подробности (грузим только видимые). */
+    private final Set<String> requested = new HashSet<>();
+    static final int PAGE = 100;
     private TextView status;
     private Button[] tabButtons = new Button[TABS.length];
     private final int[] counts = {-1, -1, -1};
@@ -91,12 +99,29 @@ public class CasesActivity extends Activity {
         status.setPadding(Ui.dp(this, 16), Ui.dp(this, 2), Ui.dp(this, 16), Ui.dp(this, 4));
         root.addView(status, Ui.matchWrap());
 
-        ScrollView sv = new ScrollView(this);
-        list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(Ui.dp(this, 12), Ui.dp(this, 4), Ui.dp(this, 12), Ui.dp(this, 24));
-        sv.addView(list);
-        root.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1));
+        android.widget.FrameLayout listBox = new android.widget.FrameLayout(this);
+        listView = new android.widget.ListView(this);
+        listView.setDivider(null);
+        listView.setSelector(new android.graphics.drawable.ColorDrawable(0));
+        listView.setClipToPadding(false);
+        listView.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 12), Ui.dp(this, 12));
+        footer = Ui.text(this, "", 13, Ui.MUTED, false);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(0, Ui.dp(this, 14), 0, Ui.dp(this, 14));
+        listView.addFooterView(footer, null, false);
+        listView.setAdapter(adapter);
+        listView.setOnScrollListener(new android.widget.AbsListView.OnScrollListener() {
+            @Override public void onScrollStateChanged(android.widget.AbsListView v, int state) {}
+            @Override public void onScroll(android.widget.AbsListView v, int first, int visible, int count) {
+                if (first + visible >= count - 5) loadMore(); // почти долистали — догрузить
+            }
+        });
+        empty = Ui.text(this, "", 16, Ui.MUTED, false);
+        empty.setGravity(Gravity.CENTER_HORIZONTAL);
+        empty.setPadding(0, Ui.dp(this, 48), 0, 0);
+        listBox.addView(listView);
+        listBox.addView(empty);
+        root.addView(listBox, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
         paintTabs();
 
@@ -153,6 +178,8 @@ public class CasesActivity extends Activity {
         if (t.equals(tab)) return;
         tab = t;
         current = new ArrayList<>();
+        total = 0;
+        requested.clear();
         paintTabs();
         render();
         refresh();
@@ -177,35 +204,37 @@ public class CasesActivity extends Activity {
         }
         final int gen = ++generation;
         final String act = tab;
+        // обновляем столько, сколько уже загружено (но не больше 500 за раз)
+        final int limit = Math.min(500, Math.max(PAGE, current.size()));
         status.setText(current.isEmpty() ? "Загрузка…" : "Обновление…");
         pool.execute(() -> {
             try {
-                List<PmCore.Case> cs = PmSession.cases(this, act);
-                synchronized (DETAILS) {
-                    for (PmCore.Case c : cs) {
-                        PmCore.Case d = DETAILS.get(c.key);
-                        if (d != null) PmCore.copyDetails(d, c);
-                    }
-                }
+                PmCore.Page page = PmSession.page(this, act, 0, limit);
+                List<PmCore.Case> cs = page.cases;
+                applyCachedDetails(cs);
                 main.post(() -> {
                     if (gen != generation) return;
                     Set<String> before = SHOWN.get(act);
                     Set<String> now = PmCore.keys(cs, new HashSet<String>());
                     fresh = new HashSet<>();
-                    if (before != null) for (String k : now) if (!before.contains(k)) fresh.add(k);
+                    if (before != null) {
+                        long prevMax = -1;
+                        for (PmCore.Case c : current) prevMax = Math.max(prevMax, PmCore.num(c));
+                        for (PmCore.Case c : cs) if (!before.contains(c.key) && PmCore.num(c) > prevMax) fresh.add(c.key);
+                    }
                     SHOWN.put(act, now);
-                    current = cs;
-                    counts[indexOf(act)] = cs.size();
+                    current = new ArrayList<>(cs);
+                    total = page.total;
+                    counts[indexOf(act)] = total;
                     paintTabs();
                     status.setText("Обновлено в " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date()));
                     render();
-                    loadMissingDetails(gen, act, cs);
                 });
             } catch (Exception e) {
                 main.post(() -> {
                     if (gen != generation) return;
                     status.setText("⚠️ " + e.getMessage());
-                    if (current.isEmpty()) render();
+                    render();
                 });
             } finally {
                 main.post(() -> {
@@ -215,18 +244,57 @@ public class CasesActivity extends Activity {
         });
     }
 
-    private void loadMissingDetails(int gen, String act, List<PmCore.Case> cs) {
-        for (PmCore.Case c : cs) {
-            if (PmCore.hasDetails(c)) continue;
-            pool.execute(() -> {
-                if (gen != generation) return;
-                PmSession.details(this, c, act);
-                synchronized (DETAILS) {
-                    DETAILS.put(c.key, c);
-                }
-                main.post(() -> { if (gen == generation) render(); });
-            });
+    /** Следующие 100 заявок, когда долистали до конца. */
+    private void loadMore() {
+        if (loadingMore || current.isEmpty() || current.size() >= total) return;
+        loadingMore = true;
+        final int gen = generation;
+        final String act = tab;
+        final int start = current.size();
+        footer.setText("Загружаю ещё…");
+        pool.execute(() -> {
+            try {
+                PmCore.Page page = PmSession.page(this, act, start, PAGE);
+                applyCachedDetails(page.cases);
+                main.post(() -> {
+                    loadingMore = false;
+                    if (gen != generation) return;
+                    Set<String> have = PmCore.keys(current, new HashSet<String>());
+                    for (PmCore.Case c : page.cases) if (!have.contains(c.key)) current.add(c);
+                    total = Math.max(page.total, current.size());
+                    if (page.cases.isEmpty()) total = current.size();
+                    render();
+                });
+            } catch (Exception e) {
+                main.post(() -> {
+                    loadingMore = false;
+                    footer.setText("⚠️ " + e.getMessage());
+                });
+            }
+        });
+    }
+
+    private void applyCachedDetails(List<PmCore.Case> cs) {
+        synchronized (DETAILS) {
+            for (PmCore.Case c : cs) {
+                PmCore.Case d = DETAILS.get(c.key);
+                if (d != null) PmCore.copyDetails(d, c);
+            }
         }
+    }
+
+    /** Подробности для карточки, которая появилась на экране. */
+    private void requestDetails(PmCore.Case c) {
+        if (PmCore.hasDetails(c) || !requested.add(c.key)) return;
+        final int gen = generation;
+        final String act = tab;
+        pool.execute(() -> {
+            PmSession.details(this, c, act);
+            synchronized (DETAILS) {
+                DETAILS.put(c.key, c);
+            }
+            main.post(() -> { if (gen == generation) adapter.notifyDataSetChanged(); });
+        });
     }
 
     private static int indexOf(String act) {
@@ -236,16 +304,29 @@ public class CasesActivity extends Activity {
 
     // ------------------------------------------------------------------ отображение
     private void render() {
-        list.removeAllViews();
-        if (current.isEmpty()) {
-            TextView empty = Ui.text(this, status.getText().toString().startsWith("Обновлено")
-                    ? "Заявок нет 🎉" : "", 16, Ui.MUTED, false);
-            empty.setGravity(Gravity.CENTER);
-            empty.setPadding(0, Ui.dp(this, 48), 0, 0);
-            list.addView(empty, Ui.matchWrap());
-            return;
+        adapter.notifyDataSetChanged();
+        boolean loaded = status.getText().toString().startsWith("Обновлено");
+        empty.setText(current.isEmpty() && loaded ? "Заявок нет 🎉" : "");
+        empty.setVisibility(current.isEmpty() ? View.VISIBLE : View.GONE);
+        if (current.isEmpty()) footer.setText("");
+        else if (current.size() < total) footer.setText("Показано " + current.size() + " из " + total + " — листайте вниз");
+        else footer.setText("Всего: " + total);
+    }
+
+    private final class CardsAdapter extends android.widget.BaseAdapter {
+        @Override public int getCount() { return current.size(); }
+        @Override public Object getItem(int i) { return current.get(i); }
+        @Override public long getItemId(int i) { return i; }
+
+        @Override
+        public View getView(int i, View convert, android.view.ViewGroup parent) {
+            PmCore.Case c = current.get(i);
+            requestDetails(c);
+            LinearLayout cell = new LinearLayout(CasesActivity.this);
+            cell.setPadding(0, Ui.dp(CasesActivity.this, 10), 0, 0);
+            cell.addView(cardFor(c), Ui.matchWrap());
+            return cell;
         }
-        for (PmCore.Case c : current) list.addView(cardFor(c), Ui.gapTop(this, 10));
     }
 
     private View cardFor(PmCore.Case c) {

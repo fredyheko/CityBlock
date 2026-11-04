@@ -175,9 +175,13 @@ public class MonitorService extends Service {
                 cases = Net.fetchCases(base, prefs.listAction());
             }
 
-            boolean first = prefs.firstRun();
+            boolean first = prefs.firstRun() || prefs.maxNumber() < 0;
             Set<String> seen = prefs.seen();
-            List<PmCore.Case> fresh = PmCore.newCases(cases, seen);
+            List<PmCore.Case> fresh = first
+                    ? PmCore.newCases(cases, seen)
+                    : PmCore.newCasesByNumber(cases, seen, prefs.maxNumber());
+            // при первом запуске — не больше 5 самых свежих, чтобы не засыпать уведомлениями
+            if (first && fresh.size() > 5) fresh = fresh.subList(fresh.size() - 5, fresh.size());
             String tgError = null;
             if (!(first && !prefs.notifyExisting())) {
                 for (PmCore.Case c : fresh) {
@@ -190,6 +194,7 @@ public class MonitorService extends Service {
             }
             // помним только то, что сейчас в списке: вернут заявку — сообщим снова
             prefs.setSeen(PmCore.keys(cases, new HashSet<String>()));
+            prefs.setMaxNumber(Math.max(prefs.maxNumber(), PmCore.maxNumber(cases)));
 
             if (prefs.failures() >= ERROR_ALERT_AFTER) Notifier.clearError(this);
             prefs.setFailures(0);

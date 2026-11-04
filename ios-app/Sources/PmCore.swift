@@ -31,8 +31,8 @@ enum PmCore {
 
     static func loginUrl(_ b: String) -> String { b + "/login/login" }
     static func homeUrl(_ b: String) -> String { b + "/cases/main" }
-    static func listUrl(_ b: String, _ action: String) -> String {
-        b + "/cases/proxyCasesList?action=\(action)&start=0&limit=100&sort=APP_NUMBER&dir=DESC"
+    static func listUrl(_ b: String, _ action: String, start: Int = 0, limit: Int = 100) -> String {
+        b + "/cases/proxyCasesList?action=\(action)&start=\(start)&limit=\(limit)&sort=APP_NUMBER&dir=DESC"
     }
     static func isLoginUrl(_ u: String?) -> Bool { u?.contains("/login/") ?? false }
     static func openCaseUrl(_ b: String, _ c: PmCase, _ action: String) -> String {
@@ -115,6 +115,14 @@ enum PmCore {
         }
         return rows.compactMap { $0 as? [String: Any] }.map(normalize)
     }
+
+    /// Сколько всего заявок в списке на сайте (totalCount).
+    static func total(_ body: String, fallback: Int) -> Int {
+        guard let o = json(body.trimmingCharacters(in: .whitespacesAndNewlines)) as? [String: Any] else { return fallback }
+        return max(fallback, Int(pick(o, "totalCount", "total")) ?? fallback)
+    }
+
+    static func num(_ c: PmCase) -> Int { Int(c.number.trimmingCharacters(in: .whitespaces)) ?? -1 }
 
     static func normalize(_ r: [String: Any]) -> PmCase {
         var c = PmCase()

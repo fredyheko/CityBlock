@@ -34,9 +34,15 @@ enum BackgroundCheck {
         (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
+    private static var maxNumber: Int {
+        get { d.object(forKey: "bgMaxNum") as? Int ?? -1 }
+        set { d.set(newValue, forKey: "bgMaxNum") }
+    }
+
     /// Открыли приложение и увидели список — эти заявки уже не «новые».
     static func markSeen(_ cases: [PmCase]) {
         seen = Set(cases.map(\.key))
+        maxNumber = max(maxNumber, cases.map(PmCore.num).max() ?? -1)
     }
 
     private static func setStatus(_ s: String) {
@@ -56,7 +62,9 @@ enum BackgroundCheck {
                 setStatus("проверено, заявок: \(cases.count)")
                 return
             }
-            let fresh = cases.filter { !before.contains($0.key) }
+            // новая = номер больше всех прежних (а не «всплывшая» снизу в первую сотню)
+            let prevMax = maxNumber
+            let fresh = cases.filter { !before.contains($0.key) && PmCore.num($0) > prevMax }
             for c in fresh.reversed() {
                 let full = c.hasDetails ? c : await PmSession.shared.details(c, action: "unassigned")
                 await notify(full)

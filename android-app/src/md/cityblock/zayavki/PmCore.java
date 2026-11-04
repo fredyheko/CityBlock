@@ -37,6 +37,11 @@ public final class PmCore {
 
     public static String homeUrl(String base) { return base + "/cases/main"; }
 
+    public static String listUrl(String base, String action, int start, int limit) {
+        return base + "/cases/proxyCasesList?action=" + action
+                + "&start=" + start + "&limit=" + limit + "&sort=APP_NUMBER&dir=DESC";
+    }
+
     public static String listUrl(String base, String action) {
         return base + "/cases/proxyCasesList?action=" + action
                 + "&start=0&limit=100&sort=APP_NUMBER&dir=DESC";
@@ -239,6 +244,51 @@ public final class PmCore {
 
     public static boolean isLoginUrl(String url) {
         return url != null && url.contains("/login/");
+    }
+
+    /** Страница списка: заявки + сколько всего в списке на сайте. */
+    public static final class Page {
+        public List<Case> cases = new ArrayList<>();
+        public int total;
+    }
+
+    public static Page parsePage(String body, String finalUrl) throws Exception {
+        Page p = new Page();
+        p.cases = parse(body, finalUrl);
+        p.total = p.cases.size();
+        String t = body == null ? "" : body.trim();
+        if (t.startsWith("{")) {
+            JSONObject o = new JSONObject(t);
+            p.total = Math.max(p.cases.size(), o.optInt("totalCount", o.optInt("total", p.cases.size())));
+        }
+        return p;
+    }
+
+    static long num(Case c) {
+        try {
+            return Long.parseLong(c.number.trim());
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    public static long maxNumber(List<Case> cases) {
+        long m = -1;
+        for (Case c : cases) m = Math.max(m, num(c));
+        return m;
+    }
+
+    /**
+     * Новые заявки: номер больше всех, что были при прошлой проверке (и их ещё не видели).
+     * Так заявки, «всплывшие» в первую сотню снизу, не считаются новыми. От старых к новым.
+     */
+    public static List<Case> newCasesByNumber(List<Case> cases, Set<String> seen, long prevMax) {
+        List<Case> out = new ArrayList<>();
+        for (int i = cases.size() - 1; i >= 0; i--) {
+            Case c = cases.get(i);
+            if (num(c) > prevMax && !seen.contains(c.key)) out.add(c);
+        }
+        return out;
     }
 
     /** Разобрать ответ proxyCasesList. */

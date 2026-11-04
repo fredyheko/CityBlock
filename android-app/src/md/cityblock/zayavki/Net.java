@@ -61,7 +61,12 @@ final class Net {
 
     /** Получить список заявок. Бросает PmCore.SessionExpired, если нужен вход. */
     static List<PmCore.Case> fetchCases(String base, String action) throws Exception {
-        Resp r = request(base, PmCore.listUrl(base, action), null);
+        return fetchPage(base, action, 0, 100).cases;
+    }
+
+    /** Страница списка (start, limit) + общее число заявок. */
+    static PmCore.Page fetchPage(String base, String action, int start, int limit) throws Exception {
+        Resp r = request(base, PmCore.listUrl(base, action, start, limit), null);
         if (r.code >= 300 && r.code < 400) {
             if (r.location == null || r.location.contains("login")) throw new PmCore.SessionExpired();
             throw new Exception("Сайт перенаправил на " + r.location);
@@ -71,7 +76,7 @@ final class Net {
             if (r.body.toLowerCase().contains("login")) throw new PmCore.SessionExpired();
             throw new Exception("Сайт ответил ошибкой " + r.code);
         }
-        return PmCore.parse(r.body, r.url);
+        return PmCore.parsePage(r.body, r.url);
     }
 
     /**

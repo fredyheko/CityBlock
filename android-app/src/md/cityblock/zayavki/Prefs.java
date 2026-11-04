@@ -43,7 +43,11 @@ final class Prefs {
     Set<String> seen() { return new HashSet<>(sp.getStringSet("seen", new HashSet<String>())); }
     boolean firstRun() { return !sp.contains("seen"); }
     void setSeen(Set<String> s) { sp.edit().putStringSet("seen", new HashSet<>(s)).apply(); }
-    void resetSeen() { sp.edit().remove("seen").apply(); }
+    void resetSeen() { sp.edit().remove("seen").remove("maxNum").apply(); }
+
+    /** Наибольший номер заявки при прошлой проверке (-1 — ещё не проверяли). */
+    long maxNumber() { return sp.getLong("maxNum", -1); }
+    void setMaxNumber(long n) { sp.edit().putLong("maxNum", n).apply(); }
 
     int failures() { return sp.getInt("failures", 0); }
     void setFailures(int n) { sp.edit().putInt("failures", n).apply(); }

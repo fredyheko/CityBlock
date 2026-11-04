@@ -258,7 +258,7 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
             }
             askVpnPermission();
         }
-        if (accountChanged || listChanged) e.remove("seen").putInt("failures", 0);
+        if (accountChanged || listChanged) e.remove("seen").remove("maxNum").putInt("failures", 0);
         e.apply();
         if (accountChanged) CookieManager.getInstance().removeAllCookies(null);
         return true;

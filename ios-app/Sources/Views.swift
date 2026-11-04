@@ -84,6 +84,17 @@ struct RootView: View {
                             CaseCard(c: c, tab: store.tab, isNew: store.fresh.contains(c.key))
                                 .contentShape(Rectangle())
                                 .onTapGesture { path.append(c) }
+                                .onAppear {
+                                    store.ensureDetails(c)
+                                    if c.key == store.cases.last?.key { Task { await store.loadMore() } }
+                                }
+                        }
+                        if !store.cases.isEmpty {
+                            Text(store.loadingMore ? "Загружаю ещё…"
+                                 : store.cases.count < store.total
+                                    ? "Показано \(store.cases.count) из \(store.total) — листайте вниз"
+                                    : "Всего: \(store.total)")
+                                .font(.footnote).foregroundColor(.secondary).padding(.vertical, 12)
                         }
                     }
                     .padding(.horizontal, 12).padding(.bottom, 24)

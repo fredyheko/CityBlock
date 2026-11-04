@@ -21,6 +21,10 @@ final class Store: ObservableObject {
     @Published var fresh: Set<String> = []
     @Published var config = Config.load()
 
+    @Published var total = 0
+    @Published var loadingMore = false
+    static let page = 100
+    private var requested: Set<String> = []
     private var details: [String: PmCase] = [:]
     private var shown: [String: Set<String>] = [:]
     private var generation = 0
@@ -29,6 +33,8 @@ final class Store: ObservableObject {
         guard t != tab else { return }
         tab = t
         cases = []
+        total = 0
+        requested = []
         Task { await self.refresh() }
     }
 
@@ -56,39 +62,69 @@ final class Store: ObservableObject {
         let gen = generation
         let act = tab
         status = cases.isEmpty ? "Загрузка…" : "Обновление…"
+        let limit = min(500, max(Self.page, cases.count))
         do {
-            var cs = try await PmSession.shared.cases(act)
+            let pg = try await PmSession.shared.page(act, start: 0, limit: limit)
             guard gen == generation else { return }
-            for i in cs.indices {
-                if let d = details[cs[i].key] {
-                    cs[i].description = d.description
-                    cs[i].client = d.client
-                    cs[i].phones = d.phones
-                    cs[i].notes = d.notes
-                }
-            }
+            let cs = pg.cases.map(withCachedDetails)
             let now = Set(cs.map(\.key))
-            fresh = shown[act].map { now.subtracting($0) } ?? []
+            let prevMax = cases.map(PmCore.num).max() ?? -1
+            if let before = shown[act] {
+                fresh = Set(cs.filter { !before.contains($0.key) && PmCore.num($0) > prevMax }.map(\.key))
+            } else {
+                fresh = []
+            }
             shown[act] = now
             cases = cs
-            counts[act] = cs.count
+            total = pg.total
+            counts[act] = pg.total
             if act == "unassigned" { BackgroundCheck.markSeen(cs) }
             let f = DateFormatter()
             f.dateFormat = "HH:mm"
             status = "Обновлено в " + f.string(from: Date())
-            for c in cs where !c.hasDetails {
-                Task {
-                    let d = await PmSession.shared.details(c, action: act)
-                    self.details[d.key] = d
-                    if gen == self.generation, let i = self.cases.firstIndex(where: { $0.key == d.key }) {
-                        self.cases[i] = d
-                    }
-                }
-            }
         } catch {
             guard gen == generation else { return }
             status = "⚠️ " + error.localizedDescription
         }
+    }
+
+    /// Следующие 100 заявок, когда долистали до конца.
+    func loadMore() async {
+        guard !loadingMore, !cases.isEmpty, cases.count < total else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        let gen = generation
+        let act = tab
+        guard let pg = try? await PmSession.shared.page(act, start: cases.count, limit: Self.page),
+              gen == generation else { return }
+        let have = Set(cases.map(\.key))
+        cases += pg.cases.filter { !have.contains($0.key) }.map(withCachedDetails)
+        total = pg.cases.isEmpty ? cases.count : max(pg.total, cases.count)
+    }
+
+    /// Подробности для карточки, которая появилась на экране.
+    func ensureDetails(_ c: PmCase) {
+        guard !c.hasDetails, !requested.contains(c.key) else { return }
+        requested.insert(c.key)
+        let gen = generation
+        let act = tab
+        Task {
+            let d = await PmSession.shared.details(c, action: act)
+            self.details[d.key] = d
+            if gen == self.generation, let i = self.cases.firstIndex(where: { $0.key == d.key }) {
+                self.cases[i] = d
+            }
+        }
+    }
+
+    private func withCachedDetails(_ c: PmCase) -> PmCase {
+        guard let d = details[c.key] else { return c }
+        var c = c
+        c.description = d.description
+        c.client = d.client
+        c.phones = d.phones
+        c.notes = d.notes
+        return c
     }
 
     func remember(_ c: PmCase) { details[c.key] = c }

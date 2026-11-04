@@ -153,6 +153,19 @@ public class CoreTest {
         check(PmCore.isBareTitle("#1669021") && PmCore.isBareTitle("1669021") && PmCore.isBareTitle("")
             && !PmCore.isBareTitle("client01 : RISCANI, STR. TEILOR, 11, 1"), "bare title");
 
+        // --- страницы и новые заявки по номеру
+        PmCore.Page pg = PmCore.parsePage("{\"totalCount\":5012,\"data\":[{\"APP_UID\":\"a\",\"APP_NUMBER\":\"105\",\"DEL_INDEX\":\"1\"},"
+            + "{\"APP_UID\":\"b\",\"APP_NUMBER\":\"104\",\"DEL_INDEX\":\"1\"}]}", base);
+        check(pg.total == 5012 && pg.cases.size() == 2, "page total");
+        check(PmCore.parsePage("[{\"APP_UID\":\"a\",\"APP_NUMBER\":\"1\"}]", base).total == 1, "page total from array");
+        check(PmCore.listUrl(base, "unassigned", 200, 100).endsWith("action=unassigned&start=200&limit=100&sort=APP_NUMBER&dir=DESC"), "page url");
+        // было: 105, 104 (max 105). Кто-то взял 104 → снизу «всплыла» 99, пришла новая 106
+        List<PmCore.Case> now = PmCore.parse("{\"data\":[{\"APP_UID\":\"n\",\"APP_NUMBER\":\"106\",\"DEL_INDEX\":\"1\"},"
+            + "{\"APP_UID\":\"a\",\"APP_NUMBER\":\"105\",\"DEL_INDEX\":\"1\"},{\"APP_UID\":\"old\",\"APP_NUMBER\":\"99\",\"DEL_INDEX\":\"1\"}]}", base);
+        List<PmCore.Case> nn = PmCore.newCasesByNumber(now, new HashSet<>(Arrays.asList("a:1", "b:1")), 105);
+        check(nn.size() == 1 && nn.get(0).number.equals("106"), "only truly new case, not the one that moved up: " + nn.size());
+        check(PmCore.maxNumber(now) == 106, "max number");
+
         if (a.length > 0) {
             Files.write(Paths.get(a[0], "fill_ok.js"), LoginJs.fill("tehnician.test", "se\"cr'et\\").getBytes("UTF-8"));
             Files.write(Paths.get(a[0], "fill_bad.js"), LoginJs.fill("tehnician.test", "wrong").getBytes("UTF-8"));
