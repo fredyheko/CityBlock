@@ -150,26 +150,6 @@ public final class PmCore {
                 + "\n\n<a href=\"" + esc(homeUrl) + "\">Открыть ProcessMaker</a>";
     }
 
-    /** Кнопки под сообщением Telegram: по одной на телефон, нажатие копирует номер. */
-    public static JSONObject telegramButtons(Case c) {
-        if (c.phones.isEmpty()) return null;
-        JSONArray rows = new JSONArray();
-        for (String ph : c.phones) {
-            JSONObject btn = new JSONObject();
-            try {
-                btn.put("text", "📞 " + CaseDetails.pretty(ph) + " — скопировать");
-                btn.put("copy_text", new JSONObject().put("text", CaseDetails.international(ph)));
-            } catch (Exception ignored) {
-            }
-            rows.put(new JSONArray().put(btn));
-        }
-        try {
-            return new JSONObject().put("inline_keyboard", rows);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
     private static void line(StringBuilder sb, String prefix, String v) {
         if (v != null && !v.isEmpty()) sb.append(prefix).append(v).append('\n');
     }

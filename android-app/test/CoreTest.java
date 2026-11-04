@@ -99,10 +99,6 @@ public class CoreTest {
             .equals(Collections.singletonList("operator3 Modificare abonament ;schimb echipament")), "single comment");
         String tg = PmCore.telegramHtml(d, "https://x");
         check(tg.contains("📞 +37369000101\n"), "telegram phone compact");
-        org.json.JSONObject btn = PmCore.telegramButtons(d).getJSONArray("inline_keyboard").getJSONArray(0).getJSONObject(0);
-        check(btn.getString("text").equals("📞 +373 69 000 101 — скопировать")
-            && btn.getJSONObject("copy_text").getString("text").equals("+37369000101"), "telegram copy button");
-        check(PmCore.telegramButtons(new PmCore.Case()) == null, "no phones -> no buttons");
         System.out.println("── telegram ──\n" + tg);
         System.out.println("────────\n🔔 Новая заявка #" + d.number + "\n" + PmCore.details(d) + "\n────────");
 
