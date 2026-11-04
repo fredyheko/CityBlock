@@ -166,6 +166,12 @@ public final class PmCore {
         }
     }
 
+    /** Заголовок — просто номер («#1669021» или пусто), без адреса и описания. */
+    public static boolean isBareTitle(String title) {
+        String t = title == null ? "" : title.trim();
+        return t.isEmpty() || t.matches("#?\\s*\\d+");
+    }
+
     /** Части заголовка «client02 : RISCANI, STR…, 13, 1 : Aditional : 4 noiembrie 2026 | 14-18». */
     public static final class Title {
         public String account = "", address = "", type = "", date = "", slot = "";

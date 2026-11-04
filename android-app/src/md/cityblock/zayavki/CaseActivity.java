@@ -77,10 +77,13 @@ public class CaseActivity extends Activity {
         if (!t.slot.isEmpty()) { addChip(chips, Ui.chip(this, "🕒 " + t.slot, Ui.ACCENT, Ui.ACCENT_BG), first); first = false; }
         if (!t.type.isEmpty()) { addChip(chips, Ui.chip(this, t.type, Ui.ORANGE, Ui.ORANGE_BG), first); first = false; }
         if (chips.getChildCount() > 0) head.addView(chips, Ui.matchWrap());
-        TextView addr = Ui.text(this, t.address, 19, Ui.TEXT, true);
+        boolean bare = ("draft".equals(action) || PmCore.isBareTitle(c.title)) && !c.process.isEmpty();
+        TextView addr = Ui.text(this, bare ? c.process : t.address, 19, Ui.TEXT, true);
         addr.setTextIsSelectable(true);
         head.addView(addr, Ui.gapTop(this, chips.getChildCount() > 0 ? 8 : 0));
-        if (!t.date.isEmpty()) head.addView(Ui.text(this, t.date, 14, Ui.MUTED, false), Ui.gapTop(this, 2));
+        if (bare && !c.task.isEmpty()) head.addView(Ui.text(this, "Этап: " + c.task, 14, Ui.MUTED, false), Ui.gapTop(this, 2));
+        if (bare && !PmCore.isBareTitle(c.title)) head.addView(Ui.text(this, c.title, 14, Ui.TEXT, false), Ui.gapTop(this, 4));
+        if (!bare && !t.date.isEmpty()) head.addView(Ui.text(this, t.date, 14, Ui.MUTED, false), Ui.gapTop(this, 2));
         String svc = CaseDetails.service(c.description);
         if (!svc.isEmpty()) head.addView(Ui.text(this, svc, 14, Ui.MUTED, false), Ui.gapTop(this, 6));
         if (!t.account.isEmpty()) head.addView(Ui.text(this, "Аккаунт: " + t.account, 14, Ui.MUTED, false), Ui.gapTop(this, 2));

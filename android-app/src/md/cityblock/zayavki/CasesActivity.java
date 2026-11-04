@@ -262,9 +262,17 @@ public class CasesActivity extends Activity {
         if (!t.type.isEmpty()) addChip(top, Ui.chip(this, t.type, Ui.ORANGE, Ui.ORANGE_BG));
         card.addView(top, Ui.matchWrap());
 
-        TextView addr = Ui.text(this, t.address, 17, Ui.TEXT, true);
-        card.addView(addr, Ui.gapTop(this, 8));
-        if (!t.date.isEmpty()) card.addView(Ui.text(this, t.date, 13, Ui.MUTED, false), Ui.gapTop(this, 2));
+        boolean draft = "draft".equals(tab);
+        if ((draft || PmCore.isBareTitle(c.title)) && !c.process.isEmpty()) {
+            // черновик: главное — что это за процесс и на каком он этапе
+            card.addView(Ui.text(this, c.process, 17, Ui.TEXT, true), Ui.gapTop(this, 8));
+            if (!c.task.isEmpty()) card.addView(Ui.text(this, "Этап: " + c.task, 14, Ui.MUTED, false), Ui.gapTop(this, 2));
+            if (!PmCore.isBareTitle(c.title)) card.addView(Ui.lines(this, c.title, 2), Ui.gapTop(this, 6));
+        } else {
+            TextView addr = Ui.text(this, t.address, 17, Ui.TEXT, true);
+            card.addView(addr, Ui.gapTop(this, 8));
+            if (!t.date.isEmpty()) card.addView(Ui.text(this, t.date, 13, Ui.MUTED, false), Ui.gapTop(this, 2));
+        }
 
         if (!c.client.isEmpty()) card.addView(Ui.lines(this, "👤 " + c.client, 1), Ui.gapTop(this, 8));
         List<CaseDetails.Comment> comments = CaseDetails.commentEntries(c.description);

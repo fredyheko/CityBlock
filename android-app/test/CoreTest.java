@@ -150,6 +150,9 @@ public class CoreTest {
         catch (Exception e) { check(e.getMessage().equals("No permission"), "start error message"); }
         check(PmCore.formUrl(base, "u", "1", "draft").endsWith("APP_UID=u&DEL_INDEX=1&action=draft"), "draft form url");
 
+        check(PmCore.isBareTitle("#1669021") && PmCore.isBareTitle("1669021") && PmCore.isBareTitle("")
+            && !PmCore.isBareTitle("client01 : RISCANI, STR. TEILOR, 11, 1"), "bare title");
+
         if (a.length > 0) {
             Files.write(Paths.get(a[0], "fill_ok.js"), LoginJs.fill("tehnician.test", "se\"cr'et\\").getBytes("UTF-8"));
             Files.write(Paths.get(a[0], "fill_bad.js"), LoginJs.fill("tehnician.test", "wrong").getBytes("UTF-8"));
