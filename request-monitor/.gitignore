@@ -1,0 +1,6 @@
+.env
+seen_cases.json
+monitor.log
+debug/
+__pycache__/
+.venv/
