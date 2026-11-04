@@ -2,24 +2,17 @@ package md.cityblock.zayavki;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.ScrollView;
-import android.widget.TextView;
 import android.widget.Toast;
 
-/** Сайт ProcessMaker внутри приложения (уже с выполненным входом) + запись действий. */
+/** Сайт ProcessMaker внутри приложения (уже с выполненным входом) и формы заявок на весь экран. */
 public class WebActivity extends Activity {
     static final String EXTRA_URL = "url";
     static final String EXTRA_FORM_UID = "formUid";
@@ -52,7 +45,7 @@ public class WebActivity extends Activity {
                 .putExtra(EXTRA_FORM_ACTION, action);
     }
 
-    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+    @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -76,7 +69,6 @@ public class WebActivity extends Activity {
         // формы PM адаптивные: ширина = ширина телефона; оболочка PM — «как на компьютере»
         s.setLoadWithOverviewMode(!form);
         s.setUseWideViewPort(!form);
-        web.addJavascriptInterface(new Recorder.Bridge(), "ZRec");
         web.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
@@ -88,14 +80,7 @@ public class WebActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (Recorder.on) view.evaluateJavascript(Recorder.HOOK_JS, null);
                 if (formUid != null && !wide) view.evaluateJavascript(FormFix.JS, null);
-            }
-
-            @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
-                Recorder.request(req.getMethod(), req.getUrl().toString());
-                return null;
             }
         });
         setContentView(web);
@@ -136,15 +121,12 @@ public class WebActivity extends Activity {
     }
 
     private void updateTitle() {
-        if (Recorder.on) setTitle("● Запись: " + Recorder.size());
-        else if (formUid != null) setTitle(number == null || number.isEmpty() ? "Новая заявка" : "Заявка #" + number);
+        if (formUid != null) setTitle(number == null || number.isEmpty() ? "Новая заявка" : "Заявка #" + number);
         else setTitle("ProcessMaker");
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu m) {
-        m.add(0, 1, 0, Recorder.on ? "⏹ Остановить запись" : "⏺ Записать действия");
-        m.add(0, 2, 0, "Показать запись");
         m.add(0, 3, 0, "Обновить страницу");
         if (formUid != null) {
             m.add(0, 5, 0, wide ? "📱 Мобильный вид" : "↔ Широкий вид (как на компьютере)");
@@ -155,7 +137,6 @@ public class WebActivity extends Activity {
 
     @Override
     public boolean onPrepareOptionsMenu(Menu m) {
-        m.findItem(1).setTitle(Recorder.on ? "⏹ Остановить запись" : "⏺ Записать действия");
         MenuItem w = m.findItem(5);
         if (w != null) w.setTitle(wide ? "📱 Мобильный вид" : "↔ Широкий вид (как на компьютере)");
         updateTitle();
@@ -165,32 +146,6 @@ public class WebActivity extends Activity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case 1:
-                if (Recorder.on) {
-                    Recorder.on = false;
-                    updateTitle();
-                    showLog();
-                } else {
-                    new AlertDialog.Builder(this)
-                            .setTitle("Запись действий")
-                            .setMessage("Возьмите заявку и заполните её как обычно. Приложение запишет, "
-                                    + "какие запросы уходят на сайт (пароли не записываются). "
-                                    + "Потом: меню → «Остановить запись» → «Копировать» и пришлите текст разработчику.")
-                            .setPositiveButton("Начать", (d, w) -> {
-                                Recorder.clear();
-                                Recorder.on = true;
-                                Recorder.add("Начало записи: " + web.getUrl());
-                                web.evaluateJavascript(Recorder.HOOK_JS, null);
-                                updateTitle();
-                                Toast.makeText(this, "Запись идёт", Toast.LENGTH_SHORT).show();
-                            })
-                            .setNegativeButton("Отмена", null)
-                            .show();
-                }
-                return true;
-            case 2:
-                showLog();
-                return true;
             case 3:
                 web.reload();
                 return true;
@@ -215,31 +170,6 @@ public class WebActivity extends Activity {
             }
         }
         return super.onOptionsItemSelected(item);
-    }
-
-    private void showLog() {
-        final String text = Recorder.text();
-        TextView tv = new TextView(this);
-        tv.setText(text.isEmpty() ? "Запись пуста" : text);
-        tv.setTextIsSelectable(true);
-        tv.setTextSize(11);
-        int p = Ui.dp(this, 14);
-        tv.setPadding(p, p / 2, p, p / 2);
-        ScrollView sv = new ScrollView(this);
-        sv.addView(tv);
-        new AlertDialog.Builder(this)
-                .setTitle("Запись (" + Recorder.size() + ")")
-                .setView(sv)
-                .setPositiveButton("Копировать", (d, w) -> {
-                    getSystemService(ClipboardManager.class)
-                            .setPrimaryClip(ClipData.newPlainText("pm-record", text));
-                    Toast.makeText(this, "Скопировано — вставьте в чат", Toast.LENGTH_SHORT).show();
-                })
-                .setNeutralButton("Поделиться", (d, w) -> startActivity(Intent.createChooser(
-                        new Intent(Intent.ACTION_SEND).setType("text/plain")
-                                .putExtra(Intent.EXTRA_TEXT, text), "Отправить запись")))
-                .setNegativeButton("Закрыть", null)
-                .show();
     }
 
     @Override
