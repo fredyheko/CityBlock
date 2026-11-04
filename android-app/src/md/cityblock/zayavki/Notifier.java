@@ -55,7 +55,7 @@ final class Notifier {
                 .setContentText(text)
                 .setOngoing(true)
                 .setShowWhen(false)
-                .setContentIntent(activity(ctx, MainActivity.class, 11))
+                .setContentIntent(activity(ctx, CasesActivity.class, 11))
                 .addAction(new Notification.Action.Builder(null, "Остановить", stopPi).build())
                 .build();
     }
@@ -69,7 +69,10 @@ final class Notifier {
                 .setStyle(new Notification.BigTextStyle().bigText(PmCore.details(c)))
                 .setCategory(Notification.CATEGORY_MESSAGE)
                 .setAutoCancel(true)
-                .setContentIntent(activity(ctx, WebActivity.class, 12));
+                .setContentIntent(PendingIntent.getActivity(ctx, id,
+                        CaseActivity.intent(ctx, c, new Prefs(ctx).listAction())
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         if (!c.phones.isEmpty()) {
             String ph = c.phones.get(0);
             Intent dial = new Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + ph))

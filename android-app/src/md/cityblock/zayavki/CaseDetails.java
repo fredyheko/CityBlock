@@ -131,6 +131,68 @@ public final class CaseDetails {
         return out;
     }
 
+    /** Комментарий из описания: когда, кто, что. */
+    public static final class Comment {
+        public String when = "", author = "", text = "";
+    }
+
+    private static final Pattern LOGIN = Pattern.compile("^([a-z][a-z0-9._]{3,})\\s+(\\S.*)$", Pattern.DOTALL);
+
+    public static List<Comment> commentEntries(String description) {
+        List<Comment> out = new ArrayList<>();
+        if (description == null) return out;
+        Matcher m = STAMP.matcher(description);
+        List<int[]> marks = new ArrayList<>();
+        while (m.find()) marks.add(new int[]{m.start(), m.end()});
+        for (int i = 0; i < marks.size(); i++) {
+            int from = marks.get(i)[1];
+            int to = i + 1 < marks.size() ? marks.get(i + 1)[0] : description.length();
+            String t = description.substring(from, to).replaceAll("\\s+", " ").trim();
+            if (t.isEmpty()) continue;
+            Comment c = new Comment();
+            c.when = description.substring(marks.get(i)[0], marks.get(i)[1]);
+            Matcher lm = LOGIN.matcher(t);
+            if (lm.matches()) {
+                c.author = lm.group(1);
+                c.text = lm.group(2).trim();
+            } else {
+                c.text = t;
+            }
+            out.add(c);
+        }
+        return out;
+    }
+
+    /** Услуга и адрес из описания: «FTTH RISCANI, STR-LA LALELELOR, 13, 1». */
+    public static String service(String description) {
+        String[] seg = segments(description);
+        return seg.length > 2 ? seg[2] : "";
+    }
+
+    /** Техническая часть описания (порт, свитч, ODF, кабель, шкаф…), по строке на элемент. */
+    public static List<String> techLines(String description) {
+        List<String> out = new ArrayList<>();
+        String[] seg = segments(description);
+        if (seg.length < 4) return out;
+        StringBuilder sb = new StringBuilder();
+        for (int i = 3; i < seg.length; i++) sb.append(i > 3 ? ", " : "").append(seg[i]);
+        String tech = sb.toString();
+        Matcher m = STAMP.matcher(tech);
+        if (m.find()) tech = tech.substring(0, m.start());
+        for (String part : tech.split(",\\s+")) {
+            String p = part.trim();
+            if (!p.isEmpty()) out.add(p);
+        }
+        return out;
+    }
+
+    private static String[] segments(String description) {
+        if (description == null || !description.contains("|")) return new String[0];
+        String[] seg = description.split("\\s*\\|\\s*");
+        for (int i = 0; i < seg.length; i++) seg[i] = seg[i].trim();
+        return seg;
+    }
+
     /** Имя клиента — первая часть описания «Имя | телефон | …», если в ней нет цифр. */
     public static String clientName(String description) {
         if (description == null) return "";

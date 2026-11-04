@@ -9,7 +9,12 @@ import android.webkit.WebViewClient;
 
 /** Сайт ProcessMaker внутри приложения (уже с выполненным входом). */
 public class WebActivity extends Activity {
+    static final String EXTRA_URL = "url";
     private WebView web;
+
+    static android.content.Intent intent(android.content.Context ctx, String url) {
+        return new android.content.Intent(ctx, WebActivity.class).putExtra(EXTRA_URL, url);
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -27,7 +32,10 @@ public class WebActivity extends Activity {
         web.setWebViewClient(new WebViewClient());
         setContentView(web);
         if (b != null) web.restoreState(b);
-        else web.loadUrl(PmCore.homeUrl(new Prefs(this).base()));
+        else {
+            String url = getIntent().getStringExtra(EXTRA_URL);
+            web.loadUrl(url != null ? url : PmCore.homeUrl(new Prefs(this).base()));
+        }
     }
 
     @Override

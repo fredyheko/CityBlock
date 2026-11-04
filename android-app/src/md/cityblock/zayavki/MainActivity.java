@@ -35,12 +35,19 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
     private TextView status;
     private LinearLayout root;
     private boolean diagWaiting = false;
+    private boolean returnToCases = false;
+
+    private void openCases() {
+        startActivity(new Intent(this, CasesActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
+        finish();
+    }
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = new Prefs(this);
         Notifier.createChannels(this);
+        setTitle("Настройки");
 
         ScrollView scroll = new ScrollView(this);
         root = new LinearLayout(this);
@@ -93,7 +100,6 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
                 toast("Проверяю…");
             }
         });
-        button("Открыть сайт", v -> startActivity(new Intent(this, WebActivity.class)));
         button("Диагностика: что сайт отдаёт по заявке", v -> {
             if (save()) {
                 diagWaiting = true;
@@ -115,6 +121,10 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         super.onResume();
         prefs.sp.registerOnSharedPreferenceChangeListener(this);
         showStatus();
+        if (returnToCases) {
+            returnToCases = false;
+            openCases();
+        }
     }
 
     @Override
@@ -213,7 +223,12 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         if (!save()) return;
         MonitorService.start(this);
         toast("Мониторинг запущен");
-        askBatteryExemption();
+        PowerManager pm = getSystemService(PowerManager.class);
+        if (pm.isIgnoringBatteryOptimizations(getPackageName())) {
+            openCases();
+        } else {
+            askBatteryExemption();
+        }
     }
 
     // ------------------------------------------------------------------ разрешения
@@ -238,8 +253,9 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
                     } catch (Exception ex) {
                         startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
                     }
+                    returnToCases = true;
                 })
-                .setNegativeButton("Позже", null)
+                .setNegativeButton("Позже", (d, w) -> openCases())
                 .show();
     }
 

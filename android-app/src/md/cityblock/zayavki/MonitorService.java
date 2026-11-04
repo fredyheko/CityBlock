@@ -13,7 +13,6 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
-import android.webkit.WebSettings;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -21,10 +20,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -63,10 +60,7 @@ public class MonitorService extends Service {
         super.onCreate();
         prefs = new Prefs(this);
         Notifier.createChannels(this);
-        try {
-            Net.userAgent = WebSettings.getDefaultUserAgent(this);
-        } catch (Exception ignored) {
-        }
+        PmSession.init(this);
     }
 
     private void goForeground(String text) {
@@ -234,19 +228,8 @@ public class MonitorService extends Service {
         prefs.sp.edit().putString("diag", d.toString()).putLong("diagAt", System.currentTimeMillis()).apply();
     }
 
-    /** Вход через WebView (в главном потоке), ждём результат. */
     private void login(String base) throws Exception {
-        final CountDownLatch latch = new CountDownLatch(1);
-        final String[] error = {null};
-        final boolean[] ok = {false};
-        main.post(() -> WebLogin.run(this, PmCore.loginUrl(base), prefs.user(), prefs.pass(),
-                (success, err) -> {
-                    ok[0] = success;
-                    error[0] = err;
-                    latch.countDown();
-                }));
-        if (!latch.await(90, TimeUnit.SECONDS)) throw new Exception("Вход занял слишком много времени");
-        if (!ok[0]) throw new Exception(error[0]);
+        PmSession.login(this, base, prefs);
     }
 
     private void setStatus(String s) {

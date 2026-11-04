@@ -102,6 +102,26 @@ public class CoreTest {
         System.out.println("── telegram ──\n" + tg);
         System.out.println("────────\n🔔 Новая заявка #" + d.number + "\n" + PmCore.details(d) + "\n────────");
 
+        // --- для экранов приложения
+        PmCore.Title tt = PmCore.title("client02 : RISCANI, STR-LA LALELELOR,  13, 1 : Aditional : 4 noiembrie 2026  |  14-18");
+        check(tt.account.equals("client02") && tt.address.equals("RISCANI, STR-LA LALELELOR,  13, 1") && tt.type.equals("Aditional")
+            && tt.date.equals("4 noiembrie 2026") && tt.slot.equals("14-18"), "title parts");
+        PmCore.Title t2 = PmCore.title("199073 : NIHORENI, STR. VIILOR,  4, 1 : Aditional : 2026-11-04 08:47:34");
+        check(t2.address.startsWith("NIHORENI") && t2.slot.isEmpty() && t2.date.equals("2026-11-04 08:47:34"), "title without slot");
+        check(PmCore.title("Просто текст").address.equals("Просто текст"), "title fallback");
+        String d2 = "Popescu Ana | 068000102 | FTTH RISCANI, STR-LA LALELELOR, 13, 1 | RS1.3.D2, port 7 on Switch RS1.3.D2-01-SPL02, ODF: RS1.3.D2-ODF3 port 15, Cable RS1.3.D2-CAB4 fiber 3, Dulap RS1.3.D2.C4 port 3, Shelter: Riskani 2026-11-03 15:52:23 operator3 Modificare abonament ;schimb echipament";
+        check(CaseDetails.service(d2).equals("FTTH RISCANI, STR-LA LALELELOR, 13, 1"), "service");
+        check(CaseDetails.techLines(d2).equals(Arrays.asList("RS1.3.D2", "port 7 on Switch RS1.3.D2-01-SPL02", "ODF: RS1.3.D2-ODF3 port 15",
+            "Cable RS1.3.D2-CAB4 fiber 3", "Dulap RS1.3.D2.C4 port 3", "Shelter: Riskani")), "tech lines: " + CaseDetails.techLines(d2));
+        List<CaseDetails.Comment> ce = CaseDetails.commentEntries(desc);
+        check(ce.size() == 2 && ce.get(0).author.equals("operator1") && ce.get(0).text.equals("Клиент не отвечает")
+            && ce.get(0).when.equals("2026-10-30 15:09:23") && ce.get(1).author.equals("operator2"), "comment entries");
+        check(CaseDetails.commentEntries("x 2026-11-03 15:52 Schimb echipament").get(0).author.isEmpty(), "no author when capitalised");
+        PmCore.Case back = PmCore.fromJson(PmCore.toJson(d));
+        check(back.key.equals(d.key) && back.phones.equals(d.phones) && back.description.equals(d.description)
+            && back.notes.equals(d.notes) && back.client.equals(d.client), "json round trip");
+        check(PmCore.openCaseUrl(base, d, "unassigned").endsWith("/cases/open?APP_UID=1983&DEL_INDEX=2&action=unassigned"), "open case url");
+
         if (a.length > 0) {
             Files.write(Paths.get(a[0], "fill_ok.js"), LoginJs.fill("tehnician.test", "se\"cr'et\\").getBytes("UTF-8"));
             Files.write(Paths.get(a[0], "fill_bad.js"), LoginJs.fill("tehnician.test", "wrong").getBytes("UTF-8"));
