@@ -81,12 +81,18 @@ final class Net {
     static void fetchDetails(String base, PmCore.Case c, String action, StringBuilder diag) {
         List<String> names = new java.util.ArrayList<>();
         List<String> bodies = new java.util.ArrayList<>();
+        boolean haveDesc = c.description != null && !c.description.isEmpty();
         for (CaseDetails.Req q : CaseDetails.requests(c, action)) {
+            if (haveDesc && diag == null && !"notes".equals(q.name)) continue;
             names.add(q.name);
             try {
                 Resp r = request(base, q.path, q.post);
                 boolean ok = r.code == 200;
                 bodies.add(ok ? r.body : "");
+                if (ok && !"notes".equals(q.name) && !CaseDetails.caseDescription(r.body).isEmpty()) {
+                    haveDesc = true;
+                    if (diag != null) diag.append("\n✓ Case Description найден в ").append(q.name).append('\n');
+                }
                 if (diag != null) {
                     diag.append("\n━━ ").append(q.name).append(" → HTTP ").append(r.code)
                             .append(r.location != null ? " → " + r.location : "").append('\n')

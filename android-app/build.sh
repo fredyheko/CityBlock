@@ -8,8 +8,8 @@ cd "$(dirname "$0")"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
 BT="$SDK/build-tools/35.0.0"
 JAR="$SDK/platforms/android-35/android.jar"
-VERSION_CODE="${VERSION_CODE:-2}"
-VERSION_NAME="${VERSION_NAME:-1.1}"
+VERSION_CODE="${VERSION_CODE:-3}"
+VERSION_NAME="${VERSION_NAME:-1.2}"
 OUT=build
 APK="$OUT/zayavki-pm.apk"
 

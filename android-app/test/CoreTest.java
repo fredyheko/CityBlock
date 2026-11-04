@@ -67,8 +67,31 @@ public class CoreTest {
         String det = PmCore.details(k);
         check(det.contains("📞 +373 69 000 111") && det.contains("📋 Conectare") && det.contains("💬 Test"), "details text");
         System.out.println(det);
+        k.description = "";
         CaseDetails.fill(k, Arrays.asList("notes", "summaryAjax", "summary"), Arrays.asList("<html>login</html>", "", null));
         check(k.phones.isEmpty() && k.description.isEmpty() && k.notes.isEmpty(), "garbage responses -> empty, no crash");
+
+        // --- Case Description из окна Summary (как на скриншоте)
+        String desc = "Ionescu Ion | 069000101 | FTTH RISCANI, STR. EXEMPLU, 16, 1 | RS1.1.D2, port 21 on Switch RS1.1.D2-01-SPL01, "
+            + "ODF: RS1.1.D2-ODF2 port 21, Cable RS1.1.D2-CAB2 fiber 9, Dulap RS1.1.D2.C2 port 9, Shelter: Riskani 2026-10-30 15:09:23 "
+            + "operator1 Клиент не отвечает 2026-10-29 10:07:14 operator2 La moment resemnarii nu a fost schimbat echipament";
+        org.json.JSONArray data = new org.json.JSONArray()
+            .put(new org.json.JSONObject().put("label", "Process").put("value", "Conectare Client Home (Epicor)").put("section", "Case Properties"))
+            .put(new org.json.JSONObject().put("label", "Case Uid").put("value", "aaaabbbbccccdddd0000111122223333"))
+            .put(new org.json.JSONObject().put("label", "Create Date").put("value", "2026-10-29 10:06:09"))
+            .put(new org.json.JSONObject().put("label", "Case Description").put("value", desc));
+        String sumJson = new org.json.JSONObject().put("success", true).put("data", data).toString();
+        check(CaseDetails.caseDescription(sumJson).equals(desc), "case description from {label,value} JSON");
+        String sumHtml = "<table><tr><td class=l>Case Number</td><td>1666663</td></tr><tr><td class=l>Case Description</td><td>"
+            + desc.replace("Клиент", "Клиент&nbsp;") + "</td></tr></table>";
+        check(CaseDetails.caseDescription(sumHtml).startsWith("Ionescu Ion | 069000101 |"), "case description from HTML table");
+        check(CaseDetails.caseDescription("{\"APP_DESCRIPTION\":\"Ion | 079111222\"}").equals("Ion | 079111222"), "APP_DESCRIPTION key");
+        PmCore.Case d = PmCore.parse("{\"data\":[{\"APP_UID\":\"1983\",\"APP_NUMBER\":1666663,\"DEL_INDEX\":2,\"APP_TITLE\":\"client01 : RISCANI, STR. EXEMPLU, 16, 1 : Aditional : 4 noiembrie 2026 | 08-14\",\"APP_DEL_PREVIOUS_USER\":\"Dispecer, Test\",\"DEL_TASK_DUE_DATE\":\"2026-11-04 17:00:00\"}]}", base).get(0);
+        CaseDetails.fill(d, Arrays.asList("getSummary", "summaryAjax", "notes"), Arrays.asList(sumJson, "", notes));
+        check(d.client.equals("Ionescu Ion"), "client name: " + d.client);
+        check(d.phones.equals(Collections.singletonList("069000101")), "phone from description only: " + d.phones);
+        check(d.description.equals(desc), "full description kept");
+        System.out.println("────────\n🔔 Новая заявка #" + d.number + "\n" + PmCore.details(d) + "\n────────");
 
         if (a.length > 0) {
             Files.write(Paths.get(a[0], "fill_ok.js"), LoginJs.fill("tehnician.test", "se\"cr'et\\").getBytes("UTF-8"));

@@ -26,8 +26,11 @@ public final class CaseDetails {
     public static List<Req> requests(PmCore.Case c, String action) {
         String q = "APP_UID=" + c.uid + "&DEL_INDEX=" + c.delIndex;
         List<Req> r = new ArrayList<>();
-        r.add(new Req("notes", "/appProxy/getNotesList", "appUid=" + c.uid + "&start=0&limit=50"));
+        String p = "appUid=" + c.uid + "&delIndex=" + c.delIndex + "&" + q;
+        // окно «Summary» → General Information (там Case Description)
+        r.add(new Req("getSummary", "/appProxy/getSummary", p + "&action=" + action));
         r.add(new Req("summaryAjax", "/cases/summaryAjax", "action=getDataSummary&" + q));
+        r.add(new Req("notes", "/appProxy/getNotesList", "appUid=" + c.uid + "&start=0&limit=50"));
         r.add(new Req("summary", "/cases/summary?" + q + "&action=" + action, null));
         return r;
     }
@@ -52,19 +55,94 @@ public final class CaseDetails {
     private static final Pattern LABEL_LINE = Pattern.compile(
             "^\\s*([^:\\n]{2,40}):\\s*(.{3,1000})$", Pattern.MULTILINE);
 
+    private static final Pattern CASE_DESC_LABEL = Pattern.compile(
+            "^(case\\s*)?descri|^описание", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern CASE_DESC_HTML = Pattern.compile(
+            "(?is)>\\s*(?:Case\\s*)?Description\\s*:?\\s*</t[dh]>\\s*<td[^>]*>(.*?)</td>");
+
+    /**
+     * Поле «Case Description» из окна Summary: «Имя | телефон | адрес | …».
+     * Ищет в JSON ({label, value} или APP_DESCRIPTION) и в HTML-таблице. "" — если нет.
+     */
+    public static String caseDescription(String body) {
+        if (body == null || body.isEmpty()) return "";
+        String t = body.trim();
+        if (t.startsWith("{") || t.startsWith("[")) {
+            try {
+                Object root = t.startsWith("[") ? new JSONArray(t) : new JSONObject(t);
+                String v = walk(root);
+                if (!v.isEmpty()) return v;
+            } catch (Exception ignored) {
+            }
+        }
+        Matcher m = CASE_DESC_HTML.matcher(body);
+        if (m.find()) {
+            String v = toText(m.group(1)).trim();
+            if (!v.isEmpty()) return v;
+        }
+        return "";
+    }
+
+    private static String walk(Object o) {
+        if (o instanceof JSONObject) {
+            JSONObject j = (JSONObject) o;
+            String label = first(j, "label", "fieldLabel", "name", "title");
+            String value = first(j, "value", "text");
+            if (!label.isEmpty() && !value.isEmpty() && CASE_DESC_LABEL.matcher(toText(label)).find()) {
+                return toText(value);
+            }
+            String direct = first(j, "APP_DESCRIPTION", "CASE_DESCRIPTION", "DESCRIPTION");
+            if (!direct.isEmpty()) return toText(direct);
+            java.util.Iterator<String> it = j.keys();
+            while (it.hasNext()) {
+                String r = walk(j.opt(it.next()));
+                if (!r.isEmpty()) return r;
+            }
+        } else if (o instanceof JSONArray) {
+            JSONArray a = (JSONArray) o;
+            for (int i = 0; i < a.length(); i++) {
+                String r = walk(a.opt(i));
+                if (!r.isEmpty()) return r;
+            }
+        }
+        return "";
+    }
+
+    /** Имя клиента — первая часть описания «Имя | телефон | …», если в ней нет цифр. */
+    public static String clientName(String description) {
+        if (description == null) return "";
+        String head = description.split("\\|", 2)[0].trim();
+        if (head.isEmpty() || head.length() > 60 || head.matches(".*\\d.*")) return "";
+        return head;
+    }
+
     /** Разобрать ответы и записать телефоны/описание/заметки в заявку. */
     public static void fill(PmCore.Case c, List<String> names, List<String> bodies) {
         Set<String> phones = new LinkedHashSet<>();
         Set<String> desc = new LinkedHashSet<>();
         List<String> notes = new ArrayList<>();
 
+        // 1) Case Description — главный источник (из списка или окна Summary)
+        String caseDesc = c.description == null ? "" : c.description;
+        for (int i = 0; i < bodies.size() && caseDesc.isEmpty(); i++) {
+            if (!"notes".equals(names.get(i))) caseDesc = caseDescription(bodies.get(i));
+        }
+        for (int i = 0; i < bodies.size(); i++) {
+            if ("notes".equals(names.get(i))) notes.addAll(parseNotes(bodies.get(i)));
+        }
+        if (!caseDesc.isEmpty()) {
+            c.description = caseDesc;
+            c.client = clientName(caseDesc);
+            c.phones = findPhones(caseDesc);
+            c.notes = notes;
+            return;
+        }
+
+        // 2) запасной вариант: ищем по всем ответам
         for (int i = 0; i < bodies.size(); i++) {
             String body = bodies.get(i);
             if (body == null || body.isEmpty()) continue;
-            if ("notes".equals(names.get(i))) {
-                notes.addAll(parseNotes(body));
-                continue;
-            }
+            if ("notes".equals(names.get(i))) continue;
             String text = toText(body);
             phones.addAll(keyedPhones(body));
             phones.addAll(findPhones(text));
@@ -75,6 +153,7 @@ public final class CaseDetails {
 
         c.phones = new ArrayList<>(phones);
         c.description = join(desc, "\n");
+        c.client = "";
         c.notes = notes;
     }
 
@@ -102,6 +181,7 @@ public final class CaseDetails {
     // ------------------------------------------------------------------ заметки
     static List<String> parseNotes(String body) {
         List<String> out = new ArrayList<>();
+        if (body == null || body.isEmpty()) return out;
         try {
             String t = body.trim();
             JSONArray arr = t.startsWith("[") ? new JSONArray(t) : null;
