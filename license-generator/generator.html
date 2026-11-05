@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Генератор ключей — Заявки PM</title>
+<style>
+  :root { --bg:#f1f3f6; --card:#fff; --text:#1c1e21; --muted:#65676b; --accent:#1565c0; --border:#dadde1; --ok:#2e7d32; --err:#c62828; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:14px; }
+  .card h2 { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin:0 0 10px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  input, select, textarea { width:100%; font:inherit; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#fff; color:inherit; }
+  textarea { font-family:ui-monospace,Consolas,monospace; font-size:13px; resize:vertical; }
+  #owner { -webkit-text-security: disc; }
+  #code { font-family:ui-monospace,Consolas,monospace; font-size:22px; letter-spacing:.08em; text-transform:uppercase; }
+  .row { display:flex; gap:10px; }
+  .row > * { flex:1; }
+  button { font:inherit; font-weight:600; border:0; border-radius:10px; padding:12px 16px; cursor:pointer; background:var(--accent); color:#fff; }
+  button.secondary { background:#e3eefb; color:var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  .msg { margin-top:10px; font-size:14px; }
+  .msg.err { color:var(--err); } .msg.ok { color:var(--ok); }
+  #result { display:none; }
+  #key { min-height:96px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 4px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  td.k { font-family:ui-monospace,Consolas,monospace; word-break:break-all; max-width:220px; }
+  .small { font-size:12px; color:var(--muted); }
+  .check { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:14px; color:var(--text); }
+  .check input { width:auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Генератор лицензионных ключей</h1>
+  <p class="sub">Заявки PM / ProcessMaker для Android. Работает без интернета, ничего никуда не отправляет.</p>
+
+  <section class="card" id="ownerCard">
+    <h2>Ключ владельца</h2>
+    <label for="owner">Вставьте секретный ключ владельца (начинается с PMOWNER-)</label>
+    <textarea id="owner" rows="3" spellcheck="false" placeholder="PMOWNER-…"></textarea>
+    <div class="check"><input type="checkbox" id="remember"><label for="remember" style="margin:0;color:inherit">Запомнить на этом компьютере</label></div>
+    <div class="msg" id="ownerMsg"></div>
+  </section>
+
+  <section class="card">
+    <h2>Новый ключ</h2>
+    <label for="code">Код телефона (из приложения, экран «Нужен лицензионный ключ»)</label>
+    <input id="code" maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false">
+    <label for="name">Кому выдаётся (имя)</label>
+    <input id="name" placeholder="Иван Петров" autocomplete="off">
+    <div class="row">
+      <div>
+        <label for="term">Срок</label>
+        <select id="term">
+          <option value="1">1 месяц</option>
+          <option value="3">3 месяца</option>
+          <option value="6">6 месяцев</option>
+          <option value="12" selected>1 год</option>
+          <option value="forever">Бессрочно</option>
+          <option value="date">До даты…</option>
+        </select>
+      </div>
+      <div>
+        <label for="date">Действует до</label>
+        <input id="date" type="date">
+      </div>
+    </div>
+    <div style="margin-top:14px"><button id="make">Создать ключ</button></div>
+    <div class="msg" id="makeMsg"></div>
+  </section>
+
+  <section class="card" id="result">
+    <h2>Ключ готов</h2>
+    <textarea id="key" readonly spellcheck="false"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button id="copy">Копировать ключ</button>
+      <button id="copyMsg" class="secondary">Копировать с текстом</button>
+    </div>
+    <div class="msg ok" id="resultInfo"></div>
+  </section>
+
+  <section class="card">
+    <h2>Выданные ключи</h2>
+    <div id="history" class="small">Пока нет.</div>
+    <div class="row" style="margin-top:10px">
+      <button id="csv" class="secondary">Скачать список (CSV)</button>
+      <button id="clear" class="secondary">Очистить список</button>
+    </div>
+    <p class="small">Список хранится только в этом браузере на этом компьютере.</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+// Открытый ключ приложения: генератор проверяет, что ключ владельца к нему подходит.
+const PUBLIC_KEY = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEjez5ifCzz22x2ITd2v8VTGIs762vBAK+V6PB2zKiPLumFtNz+xvGneEYfCjx8Sn4aJJZKaheV5Nqv2fWjhjV4w==";
+const ALPHABET = /^[A-HJ-NP-Z2-9]{8}$/;   // как в приложении: без 0/O и 1/I
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+
+const b64dec = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const concat = (...parts) => { const out = []; for (const p of parts) out.push(...p); return Uint8Array.from(out); };
+
+// WebCrypto подписывает в формате r||s, Android проверяет DER — переводим.
+function derInt(b) {
+  let i = 0; while (i < b.length - 1 && b[i] === 0) i++;
+  let v = Array.from(b.slice(i)); if (v[0] & 0x80) v = [0, ...v];
+  return [0x02, v.length, ...v];
+}
+function p1363ToDer(sig) {
+  const r = derInt(sig.slice(0, 32)), s = derInt(sig.slice(32));
+  return Uint8Array.from([0x30, r.length + s.length, ...r, ...s]);
+}
+
+let ownerKey = null;
+async function loadOwner(text) {
+  const t = text.replace(/\s+/g, "");
+  if (!t.startsWith("PMOWNER-")) throw new Error("Это не ключ владельца (должен начинаться с PMOWNER-)");
+  const priv = await crypto.subtle.importKey("pkcs8", b64dec(t.slice(8)), { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const pub = await crypto.subtle.importKey("spki", b64dec(PUBLIC_KEY), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+  const probe = new Uint8Array([1, 2, 3]);
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, priv, probe);
+  if (!await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, sig, probe))
+    throw new Error("Ключ владельца не подходит к этому приложению");
+  return priv;
+}
+
+async function onOwnerInput() {
+  const text = $("owner").value.trim();
+  const msg = $("ownerMsg");
+  ownerKey = null;
+  if (!text) { msg.textContent = ""; return; }
+  try {
+    ownerKey = await loadOwner(text);
+    msg.className = "msg ok"; msg.textContent = "✓ Ключ владельца подходит";
+    if ($("remember").checked) store.set("pmOwner", text); else store.del("pmOwner");
+  } catch (e) {
+    msg.className = "msg err"; msg.textContent = e.message || "Не удалось прочитать ключ";
+  }
+}
+
+function normCode(c) { return c.toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+function iso(d) { return d.toISOString().slice(0, 10); }
+function addMonths(n) { const d = new Date(); d.setMonth(d.getMonth() + n); return iso(d); }
+function expiry() {
+  const t = $("term").value;
+  if (t === "forever") return "2099-12-31";
+  if (t === "date") return $("date").value;
+  return addMonths(+t);
+}
+function syncDate() {
+  const t = $("term").value;
+  $("date").disabled = t !== "date";
+  if (t !== "date") $("date").value = t === "forever" ? "" : expiry();
+}
+
+async function makeKey() {
+  const msg = $("makeMsg");
+  msg.className = "msg err";
+  if (!ownerKey) { msg.textContent = "Сначала вставьте ключ владельца"; return; }
+  const code = normCode($("code").value);
+  if (!ALPHABET.test(code)) { msg.textContent = "Код телефона — 8 символов, как в приложении (например K7QM-3XRA)"; return; }
+  const name = $("name").value.replace(/\|/g, "/").trim();
+  if (!name) { msg.textContent = "Укажите, кому выдаётся ключ"; return; }
+  const exp = expiry();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(exp)) { msg.textContent = "Укажите дату окончания"; return; }
+  const device = code.slice(0, 4) + "-" + code.slice(4);
+  const payload = new TextEncoder().encode(name + "|" + device + "|" + exp);
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, ownerKey, payload));
+  const key = "PM1-" + b64url(payload) + "." + b64url(p1363ToDer(sig));
+  msg.textContent = "";
+  $("key").value = key;
+  $("result").style.display = "block";
+  const human = exp === "2099-12-31" ? "бессрочно" : "до " + exp;
+  $("resultInfo").textContent = "Для: " + name + " · телефон " + device + " · " + human;
+  $("copyMsg").dataset.text = "Ключ для «Заявки PM» (" + name + ", " + human + "):\n" + key;
+  const hist = JSON.parse(store.get("pmHistory", "[]"));
+  hist.unshift({ issued: iso(new Date()), name, device, expiry: exp, key });
+  store.set("pmHistory", JSON.stringify(hist));
+  renderHistory();
+  $("result").scrollIntoView({ behavior: "smooth" });
+}
+
+function renderHistory() {
+  const hist = JSON.parse(store.get("pmHistory", "[]"));
+  if (!hist.length) { $("history").textContent = "Пока нет."; return; }
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  $("history").innerHTML = "<table><tr><th>Выдан</th><th>Кому</th><th>Телефон</th><th>До</th><th>Ключ</th></tr>" +
+    hist.map(h => `<tr><td>${esc(h.issued)}</td><td>${esc(h.name)}</td><td>${esc(h.device)}</td>` +
+      `<td>${h.expiry === "2099-12-31" ? "бессрочно" : esc(h.expiry)}</td><td class="k">${esc(h.key)}</td></tr>`).join("") + "</table>";
+}
+
+async function copy(text, btn) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { $("key").select(); document.execCommand("copy"); }
+  const old = btn.textContent; btn.textContent = "Скопировано ✓"; setTimeout(() => btn.textContent = old, 1500);
+}
+
+$("owner").addEventListener("input", onOwnerInput);
+$("remember").addEventListener("change", onOwnerInput);
+$("term").addEventListener("change", syncDate);
+$("code").addEventListener("input", e => {
+  const c = normCode(e.target.value).slice(0, 8);
+  e.target.value = c.length > 4 ? c.slice(0, 4) + "-" + c.slice(4) : c;
+});
+$("make").addEventListener("click", makeKey);
+$("copy").addEventListener("click", e => copy($("key").value, e.target));
+$("copyMsg").addEventListener("click", e => copy(e.target.dataset.text || $("key").value, e.target));
+$("csv").addEventListener("click", () => {
+  const hist = JSON.parse(store.get("pmHistory", "[]"));
+  const rows = [["Выдан", "Кому", "Телефон", "До", "Ключ"], ...hist.map(h => [h.issued, h.name, h.device, h.expiry, h.key])];
+  const csv = "﻿" + rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(";")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = "klyuchi-zayavki-pm.csv"; a.click();
+});
+$("clear").addEventListener("click", () => {
+  if (confirm("Очистить список выданных ключей? Сами ключи продолжат работать.")) { store.del("pmHistory"); renderHistory(); }
+});
+
+if (!window.crypto || !crypto.subtle) {
+  $("ownerMsg").className = "msg err";
+  $("ownerMsg").textContent = "Этот браузер не поддерживает подпись ключей. Откройте файл в Chrome или Edge.";
+}
+const saved = store.get("pmOwner", "");
+if (saved) { $("owner").value = saved; $("remember").checked = true; onOwnerInput(); }
+syncDate();
+renderHistory();
+</script>
+</body>
+</html>

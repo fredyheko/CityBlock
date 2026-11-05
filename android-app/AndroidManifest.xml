@@ -38,6 +38,9 @@
 
         <activity android:name=".CaseActivity" android:exported="false" />
 
+        <activity android:name=".LicenseActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <activity android:name=".WebActivity" android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 

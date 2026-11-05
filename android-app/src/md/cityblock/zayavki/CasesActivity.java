@@ -63,6 +63,11 @@ public class CasesActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        if (!License.ok(this)) {
+            startActivity(new Intent(this, LicenseActivity.class));
+            finish();
+            return;
+        }
         setTitle("Заявки");
         Notifier.createChannels(this);
         if (b != null) tab = b.getString("tab", tab);
@@ -139,6 +144,11 @@ public class CasesActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (!License.ok(this)) { // нет ключа или срок закончился
+            startActivity(new Intent(this, LicenseActivity.class));
+            finish();
+            return;
+        }
         resumed = true;
         refresh();
     }
@@ -153,6 +163,7 @@ public class CasesActivity extends Activity {
     @Override
     protected void onDestroy() {
         pool.shutdownNow();
+        main.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 

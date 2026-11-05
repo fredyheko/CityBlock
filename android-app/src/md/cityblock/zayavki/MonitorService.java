@@ -160,6 +160,11 @@ public class MonitorService extends Service {
 
     // ------------------------------------------------------------------ проверка
     private void runCheck() {
+        LicenseCore.Check lic = License.check(this);
+        if (!lic.ok) {
+            setStatus("Нет лицензии: " + lic.error);
+            return;
+        }
         if (!prefs.configured()) {
             setStatus("Укажите логин и пароль в приложении");
             return;

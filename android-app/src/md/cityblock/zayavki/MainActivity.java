@@ -133,6 +133,14 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         llp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
         llp.topMargin = dp(28);
         root.addView(logo, llp);
+        LicenseCore.Check lic = License.check(this);
+        TextView licView = Ui.text(this, lic.ok
+                ? "Лицензия: " + lic.info.name + " · " + LicenseActivity.human(lic.info.expiry)
+                        + "\nКод телефона: " + License.deviceCode(this)
+                : "Лицензия: " + lic.error, 12, Ui.MUTED, false);
+        licView.setGravity(android.view.Gravity.CENTER);
+        licView.setOnClickListener(v -> startActivity(new Intent(this, LicenseActivity.class)));
+        root.addView(licView, Ui.gapTop(this, 12));
         TextView version = Ui.text(this, "ProcessMaker для телефона, версия " + ver, 12, Ui.MUTED, false);
         version.setGravity(android.view.Gravity.CENTER);
         root.addView(version, Ui.gapTop(this, 8));
