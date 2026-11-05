@@ -187,14 +187,10 @@ public class MonitorService extends Service {
                     : PmCore.newCasesByNumber(cases, seen, prefs.maxNumber());
             // при первом запуске — не больше 5 самых свежих, чтобы не засыпать уведомлениями
             if (first && fresh.size() > 5) fresh = fresh.subList(fresh.size() - 5, fresh.size());
-            String tgError = null;
             if (!(first && !prefs.notifyExisting())) {
                 for (PmCore.Case c : fresh) {
                     Net.fetchDetails(base, c, prefs.listAction(), null);
                     Notifier.newCase(this, c);
-                    String e = Net.telegram(prefs.tgToken(), prefs.tgChat(),
-                            PmCore.telegramHtml(c, PmCore.homeUrl(base)));
-                    if (e != null) tgError = e;
                 }
             }
             // помним только то, что сейчас в списке: вернут заявку — сообщим снова
@@ -205,8 +201,7 @@ public class MonitorService extends Service {
             prefs.setFailures(0);
             String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
             String what = "unassigned".equals(prefs.listAction()) ? "Unassigned" : "Inbox";
-            setStatus("Проверено в " + time + ". " + what + ": " + cases.size()
-                    + (tgError != null ? "\n⚠️ " + tgError : ""));
+            setStatus("Проверено в " + time + ". " + what + ": " + cases.size());
         } catch (Exception e) {
             int n = prefs.failures() + 1;
             prefs.setFailures(n);

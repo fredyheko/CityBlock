@@ -368,7 +368,7 @@ public final class PmCore {
 
     public static String details(Case c) { return details(c, false); }
 
-    /** compactPhones: +37368000102 без пробелов — так Telegram на Android делает номер нажимаемым. */
+    /** compactPhones: +37368000102 без пробелов. */
     public static String details(Case c, boolean compactPhones) {
         StringBuilder sb = new StringBuilder();
         line(sb, "📍 ", c.title);
@@ -390,10 +390,6 @@ public final class PmCore {
         return sb.toString().trim();
     }
 
-    public static String telegramHtml(Case c, String homeUrl) {
-        return "🔔 <b>Новая заявка #" + esc(c.number) + "</b>\n" + esc(details(c, true))
-                + "\n\n<a href=\"" + esc(homeUrl) + "\">Открыть ProcessMaker</a>";
-    }
 
     private static void line(StringBuilder sb, String prefix, String v) {
         if (v != null && !v.isEmpty()) sb.append(prefix).append(v).append('\n');

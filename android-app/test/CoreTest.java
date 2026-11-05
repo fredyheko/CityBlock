@@ -32,7 +32,6 @@ public class CoreTest {
         List<PmCore.Case> all = PmCore.newCases(cs, new HashSet<>());
         check(all.get(0).number.equals("16601"), "new cases ordered oldest first");
 
-        check(PmCore.telegramHtml(cs.get(1), "https://x").contains("RISCANI &lt;b&gt;"), "telegram html escaped");
         System.out.println(PmCore.details(cs.get(0)).replace("\n", " | "));
 
         check(PmCore.parse("{\"data\":[]}", base).isEmpty(), "empty list");
@@ -97,9 +96,7 @@ public class CoreTest {
         check(!det2.contains("FTTH") && !det2.contains("Срок") && !det2.contains("Отправил") && !det2.contains("Selectare"), "no duplicated/extra lines");
         check(CaseDetails.comments("Popescu Ana | 068000102 | FTTH RISCANI | Shelter: Riskani 2026-11-03 15:52:23 operator3 Modificare abonament ;schimb echipament")
             .equals(Collections.singletonList("operator3 Modificare abonament ;schimb echipament")), "single comment");
-        String tg = PmCore.telegramHtml(d, "https://x");
-        check(tg.contains("📞 +37369000101\n"), "telegram phone compact");
-        System.out.println("── telegram ──\n" + tg);
+        check(PmCore.details(d, true).contains("📞 +37369000101\n"), "compact phone");
         System.out.println("────────\n🔔 Новая заявка #" + d.number + "\n" + PmCore.details(d) + "\n────────");
 
         // --- для экранов приложения

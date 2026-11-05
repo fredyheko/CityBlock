@@ -25,8 +25,6 @@ final class Prefs {
     int intervalMin() { return Math.max(1, sp.getInt("interval", 1)); }
     boolean keepAwake() { return sp.getBoolean("keepAwake", true); }
     boolean notifyExisting() { return sp.getBoolean("notifyExisting", true); }
-    String tgToken() { return sp.getString("tgToken", "").trim(); }
-    String tgChat() { return sp.getString("tgChat", "").trim(); }
 
     boolean wgAuto() { return sp.getBoolean("wgAuto", false); }
     String wgTunnel() { return sp.getString("wgTunnel", "").trim(); }

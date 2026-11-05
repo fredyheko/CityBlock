@@ -25,10 +25,10 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/** Экран настроек: логин, пароль, интервал, Telegram; запуск/остановка. */
+/** Экран настроек: логин, пароль, интервал, VPN; запуск/остановка. */
 public class MainActivity extends Activity implements SharedPreferences.OnSharedPreferenceChangeListener {
     private Prefs prefs;
-    private EditText host, workspace, user, pass, interval, tgToken, tgChat, wgTunnel;
+    private EditText host, workspace, user, pass, interval, wgTunnel;
     private RadioButton rbUnassigned, rbInbox;
     private Switch keepAwake, notifyExisting, wgAuto;
     private TextView status;
@@ -81,9 +81,6 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         keepAwake = toggle("Не давать телефону засыпать (уведомления без задержек, но расход батареи выше)");
         notifyExisting = toggle("При первом запуске сообщить и об уже висящих заявках");
 
-        header("Telegram (необязательно)");
-        tgToken = field("Токен бота от @BotFather", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
-        tgChat = field("Chat ID (несколько — через запятую)", InputType.TYPE_CLASS_TEXT);
 
         header("VPN (WireGuard)");
         wgAuto = toggle("Включать VPN на мобильном интернете, выключать на Wi-Fi");
@@ -215,8 +212,6 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
         (prefs.listAction().equals("todo") ? rbInbox : rbUnassigned).setChecked(true);
         keepAwake.setChecked(prefs.keepAwake());
         notifyExisting.setChecked(prefs.notifyExisting());
-        tgToken.setText(prefs.tgToken());
-        tgChat.setText(prefs.tgChat());
         wgAuto.setChecked(prefs.wgAuto());
         wgTunnel.setText(prefs.wgTunnel());
     }
@@ -251,8 +246,8 @@ public class MainActivity extends Activity implements SharedPreferences.OnShared
                 .putInt("interval", min)
                 .putBoolean("keepAwake", keepAwake.isChecked())
                 .putBoolean("notifyExisting", notifyExisting.isChecked())
-                .putString("tgToken", tgToken.getText().toString().trim())
-                .putString("tgChat", tgChat.getText().toString().trim())
+                .remove("tgToken")
+                .remove("tgChat")
                 .putBoolean("wgAuto", wgAuto.isChecked())
                 .putString("wgTunnel", wgTunnel.getText().toString().trim());
         if (wgAuto.isChecked()) {
