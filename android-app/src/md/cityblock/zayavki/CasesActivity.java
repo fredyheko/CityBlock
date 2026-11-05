@@ -37,7 +37,12 @@ public class CasesActivity extends Activity {
     /** Что было в списке при прошлом показе — чтобы подсветить новые. */
     private static final Map<String, Set<String>> SHOWN = new HashMap<>();
 
-    private final ExecutorService pool = Executors.newFixedThreadPool(3);
+    /** Список заявок — свой поток, чтобы его не задерживали подробности карточек. */
+    private final ExecutorService listPool = Executors.newSingleThreadExecutor();
+    /** Подробности карточек (клиент, телефон) — не больше 2 одновременно. */
+    private final ExecutorService detailsPool = Executors.newFixedThreadPool(2);
+    /** Прочие действия (New case, Start case). */
+    private final ExecutorService pool = Executors.newCachedThreadPool();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Runnable autoRefresh = this::refresh;
     private boolean resumed = false;
@@ -163,6 +168,8 @@ public class CasesActivity extends Activity {
     @Override
     protected void onDestroy() {
         pool.shutdownNow();
+        listPool.shutdownNow();
+        detailsPool.shutdownNow();
         main.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
@@ -218,7 +225,7 @@ public class CasesActivity extends Activity {
         // обновляем столько, сколько уже загружено (но не больше 500 за раз)
         final int limit = Math.min(500, Math.max(PAGE, current.size()));
         status.setText(current.isEmpty() ? "Загрузка…" : "Обновление…");
-        pool.execute(() -> {
+        listPool.execute(() -> {
             try {
                 PmCore.Page page = PmSession.page(this, act, 0, limit);
                 List<PmCore.Case> cs = page.cases;
@@ -263,7 +270,7 @@ public class CasesActivity extends Activity {
         final String act = tab;
         final int start = current.size();
         footer.setText("Загружаю ещё…");
-        pool.execute(() -> {
+        listPool.execute(() -> {
             try {
                 PmCore.Page page = PmSession.page(this, act, start, PAGE);
                 applyCachedDetails(page.cases);
@@ -294,12 +301,27 @@ public class CasesActivity extends Activity {
         }
     }
 
+    private boolean stillListed(String key) {
+        try {
+            List<PmCore.Case> snapshot = current;
+            for (int i = 0; i < snapshot.size(); i++) if (snapshot.get(i).key.equals(key)) return true;
+            return false;
+        } catch (RuntimeException e) { // список как раз меняется — лучше загрузить
+            return true;
+        }
+    }
+
     /** Подробности для карточки, которая появилась на экране. */
     private void requestDetails(PmCore.Case c) {
         if (PmCore.hasDetails(c) || !requested.add(c.key)) return;
         final int gen = generation;
         final String act = tab;
-        pool.execute(() -> {
+        detailsPool.execute(() -> {
+            // пока ждали очереди, вкладку могли сменить или заявка ушла из списка — не грузим зря
+            if (gen != generation || !stillListed(c.key)) {
+                main.post(() -> requested.remove(c.key));
+                return;
+            }
             PmSession.details(this, c, act);
             synchronized (DETAILS) {
                 DETAILS.put(c.key, c);
